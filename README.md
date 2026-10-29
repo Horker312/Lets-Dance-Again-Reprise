@@ -4,8 +4,8 @@
 
 | 구분 | 소스 위치 | 공개 기준 버전 | 실행 환경 |
 |---|---|---|---|
-| LDA:R 본 모드 | [runtime/](runtime/) | 0.4.14, Photo Mode 일시정지 수정본 | Skyrim SE **1.5.97**, SKSE64 x64 |
-| Dance Studio 편집기 | [editor/](editor/) | 0.4.10 | Windows, .NET 10 WPF |
+| LDA:R 본 모드 | [runtime/](runtime/) | 0.5.5, Photo Mode 일시정지 수정본 | Skyrim SE **1.5.97**, SKSE64 x64 |
+| Dance Studio 편집기 | [editor/](editor/) | 0.5.0 | Windows, .NET 10 WPF |
 | CommonLibSSE-NG | [vendor/CommonLibSSE-NG/](vendor/CommonLibSSE-NG/) | 실제 사용한 로컬 SDK 소스 스냅샷 | SE 전용 빌드 |
 
 [프로젝트 안내](docs/README-KO.md) · [빌드 안내](docs/BUILDING.md) · [라이선스와 외부 자료](THIRD_PARTY.md)
@@ -22,7 +22,7 @@ Dance Studio는 별도 Windows 편집기입니다. 타임라인에서 춤·카�
 
 ## 게임 버전 지원 범위
 
-현재 DLL은 `ENABLE_SKYRIM_SE=1`만 사용해 빌드되며 실행 버전도 **1.5.97만 허용**합니다. 후킹 위치 역시 이 버전을 기준으로 확인했습니다. CommonLib을 사용한다고 모든 Skyrim 버전이 자동 지원되지는 않습니다. **1.6 계열과 다른 실행 버전은 현재 빌드의 지원 대상이 아닙니다.** 버전 검사만 바꾸는 것으로 호환성을 확보할 수 없습니다.
+현재 DLL은 기본적으로 **1.5.97만 허용**합니다. 실험적으로 1.6.640과 1.6.1170의 지원을 시작했지만, 작동을 장담할 순 없습니다.
 
 ## 라이선스
 
@@ -32,6 +32,4 @@ Dance Studio는 별도 Windows 편집기입니다. 타임라인에서 춤·카�
 
 ## 검증 범위
 
-공개 준비 과정에서 자체 C++·C# 소스가 기존 로컬 버전과 동일한지 해시로 확인했습니다. 대응 정보는 [docs/source-provenance.json](docs/source-provenance.json)에 있습니다. 개발 환경에서 편집기와 본 모드 DLL의 재빌드를 확인했습니다. 본 모드는 기존의 대응 SE 전용 SDK 라이브러리를 사용했으며 SDK 전체를 새로 컴파일하는 경로까지 이번에 재검증하지는 않았습니다.
-
-오프라인 빌드·검사는 모든 게임 내 모드 조합의 정상 작동을 의미하지 않습니다. 이번 소스 공개 작업으로 새로운 게임 플레이 검증을 했다고 주장하지 않습니다.
+공개 준비 과정에서 자체 C++·C# 소스가 기존 로컬 버전과 동일한지 해시로 확인했습니다. 대응 정보는 [docs/source-provenance.json](docs/source-provenance.json)에 있습니다. 
