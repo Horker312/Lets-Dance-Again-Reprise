@@ -19,9 +19,9 @@ public static class VolumeTests {
    for(int i=0;i<8000;i++)Check(BitConverter.ToInt16(baked.Pcm,i*2)==(short)Math.Round(samples[i%samples.Length]*gain),"WAV gain");
   }
   Check(pcm.SequenceEqual(Enumerable.Range(0,8000).SelectMany(i=>BitConverter.GetBytes(samples[i%samples.Length]))),"Source unchanged");
-  var project=new SongProject{PreviewVolume=.35,ApplyVolumeInGame=true};string projectPath=Path.Combine(output,"volume.danceproj");project.Save(projectPath);var loaded=SongProject.Load(projectPath);Check(loaded.PreviewVolume==.35&&loaded.ApplyVolumeInGame&&loaded.SchemaVersion==3,"Round trip");
-  File.WriteAllText(projectPath,"{\"SchemaVersion\":1}");loaded=SongProject.Load(projectPath);Check(loaded.PreviewVolume==.7&&!loaded.ApplyVolumeInGame,"Legacy defaults");
-  File.WriteAllText(projectPath,"{\"SchemaVersion\":3,\"PreviewVolume\":1.1}");bool invalid=false;try{SongProject.Load(projectPath);}catch(InvalidDataException){invalid=true;}Check(invalid,"Invalid project volume rejected");
+  var project=new SongProject{PreviewVolume=.35,ApplyVolumeInGame=true};string projectPath=Path.Combine(output,"volume.danceproj");project.Save(projectPath);var loaded=SongProject.Load(projectPath);Check(loaded.PreviewVolume==.35&&loaded.ApplyVolumeInGame&&loaded.SchemaVersion==5,"Round trip");
+  File.WriteAllText(projectPath,"{\"SchemaVersion\":1}");bool legacyRejected=false;try{SongProject.Load(projectPath);}catch(InvalidDataException){legacyRejected=true;}Check(legacyRejected,"old project schema explicitly rejected");
+  File.WriteAllText(projectPath,"{\"SchemaVersion\":5,\"PreviewVolume\":1.1}");bool invalid=false;try{SongProject.Load(projectPath);}catch(InvalidDataException){invalid=true;}Check(invalid,"Invalid project volume rejected");
   File.WriteAllText(Path.Combine(output,"validation.json"),JsonSerializer.Serialize(new{passed=true,checks},SongProject.Json));
  }
 }

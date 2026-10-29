@@ -4,7 +4,7 @@ namespace DanceStudio;
 public sealed class OutputRate {
  public string Mode {get;set;}="Auto";
  public double Value {get;set;}=24;
- public void Validate(){if(Mode is not ("Auto" or "Manual")||!double.IsFinite(Value)||Value<1||Value>120)throw new InvalidDataException("출력 FPS는 Auto/Manual, 수동 값은 1~120이어야 합니다.");}
+ public void Validate(){if(Mode is not ("Auto" or "Manual")||!double.IsFinite(Value)||Value<1||Value>120)throw new InvalidDataException(UiText.T("t0305"));}
  public static double? Source(MotionClip? clip){
   if(clip==null||clip.Frames<2||clip.Duration<=0)return null;
   double rate=(clip.Frames-1)/clip.Duration;
@@ -19,5 +19,5 @@ public sealed class OutputRate {
  }
  public double Resolve(MotionClip? clip,TrackEdit edit){Validate();return Mode=="Manual"?Value:Math.Clamp((Source(clip)??24)*edit.Speed,1,120);}
  public static bool Unedited(MotionClip clip,TrackEdit edit,double begin,double end,bool poseEdited)=>edit.In==0&&Math.Abs(edit.Out-clip.Duration)<1e-6&&edit.Start==0&&edit.Speed==1&&begin==0&&Math.Abs(end-clip.Duration)<1e-6&&!poseEdited;
- public string Describe(MotionClip? clip,TrackEdit edit,bool copy){var source=Source(clip);return $"원본 {(source.HasValue?source.Value.ToString("0.###"):"확인 불가")} / 출력 {Resolve(clip,edit):0.###} FPS · {(copy?"원본 복사":"재샘플링")}"+(Mode=="Auto"&&(source??24)*edit.Speed>120?" (120 제한)":"");}
+ public string Describe(MotionClip? clip,TrackEdit edit,bool copy){var source=Source(clip);return UiText.F("t0308", (source.HasValue?source.Value.ToString("0.###"):UiText.T("t0046")), Resolve(clip,edit), (copy?UiText.T("t0306"):UiText.T("t0307")))+(Mode=="Auto"&&(source??24)*edit.Speed>120?UiText.T("t0309"):"");}
 }

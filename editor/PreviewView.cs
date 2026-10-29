@@ -8,7 +8,7 @@ using Q=System.Numerics.Quaternion;
 namespace DanceStudio;
 
 public sealed class PreviewView:Border {
- readonly TextBlock cameraWarning=new(){Text="카메라 본·전방축을 확인하세요.",Foreground=Brushes.LightGray,HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Center,Visibility=Visibility.Collapsed};
+ readonly TextBlock cameraWarning=new(){Text=UiText.T("t0318"),Foreground=Brushes.LightGray,HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Center,Visibility=Visibility.Collapsed};
  readonly Viewport3D viewport=new();readonly Grid frame=new(){Background=Brushes.Black};double aspect=16.0/9;readonly Model3DGroup group=new();readonly Model3DGroup body=new();readonly Model3DGroup floor=new();
  readonly PerspectiveCamera viewCamera=new(){FieldOfView=48,NearPlaneDistance=.1,FarPlaneDistance=20000};
  readonly List<(int A,int B,MeshGeometry3D Mesh,double Radius)> bones=[];

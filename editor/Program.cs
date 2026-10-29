@@ -9,6 +9,8 @@ namespace DanceStudio;
 public static class Program {
  [STAThread] public static void Main(string[] args) {
   try {
+   if(args.Length>0&&args[0]=="--localization-test"){LocalizationTests.Run(args[1]);return;}
+
    if(args.Length>0&&args[0]=="--inspect") {
     var a=MotionClip.Read(args[1]).Container.animations!.Single();var values=new Dictionary<string,object?>{{"type",a.GetType().Name}};
     foreach(var p in a.GetType().GetProperties()) {
@@ -75,7 +77,7 @@ public static class Program {
       window.CleanForSmoke();window.Close();
      }catch(Exception ex){File.WriteAllText(args[2]+".error.txt",ex.ToString());Environment.ExitCode=1;window.CleanForSmoke();window.Close();}
     };
-   }else if(args.Length>0&&File.Exists(args[0]))window.Loaded+=async(_,_)=>{try{await window.LoadProject(SongProject.Load(args[0]));}catch(Exception ex){MessageBox.Show(ex.Message,"프로젝트 읽기 실패");}};
+   }else if(args.Length>0&&File.Exists(args[0]))window.Loaded+=async(_,_)=>{try{await window.LoadProject(SongProject.Load(args[0]));}catch(Exception ex){MessageBox.Show(ex.Message,UiText.T("t0319"));}};
    app.Run(window);
   } catch(Exception ex) {File.WriteAllText(Path.Combine(AppContext.BaseDirectory,"error.txt"),ex.ToString());Environment.ExitCode=1;}
  }

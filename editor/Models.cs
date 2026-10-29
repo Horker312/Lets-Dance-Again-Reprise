@@ -22,9 +22,9 @@ public sealed class TrackEdit {
  }
  public void TrimEnd(double originalIn,double originalOut,double timelineDelta,double sourceDuration){double upper=Math.Max(originalIn,sourceDuration),lower=Math.Min(upper,originalIn+.001);Out=Math.Clamp(originalOut+timelineDelta*Speed,lower,upper);}
  public void Validate(double sourceDuration) {
-  if(!double.IsFinite(Speed)||Speed<.05||Speed>8)throw new InvalidDataException("배속은 0.05~8.0 사이의 숫자여야 합니다.");
+  if(!double.IsFinite(Speed)||Speed<.05||Speed>8)throw new InvalidDataException(UiText.T("t0246"));
   if(!double.IsFinite(In)||!double.IsFinite(Out)||!double.IsFinite(Start)||In<0||Out<=In||Out>sourceDuration+0.0001)
-   throw new InvalidDataException("트랙의 시작·끝·시간차를 확인하세요. 끝은 시작보다 커야 합니다.");
+   throw new InvalidDataException(UiText.T("t0247"));
  }
 }
 public sealed class SongProject {
@@ -35,7 +35,7 @@ public sealed class SongProject {
  public string PackageId(bool dance,bool camera){string kind=PackageKind(dance,camera);PackageIds??=new();if(!PackageIds.TryGetValue(kind,out var id)||string.IsNullOrWhiteSpace(id))PackageIds[kind]=id=Guid.NewGuid().ToString("N");return id;}
  public void RemoveTrack(int index){switch(index){case 0:Dance=new();break;case 1:Camera=new();break;case 2:Audio=new();break;default:throw new ArgumentOutOfRangeException(nameof(index));}}
 
- public string Title {get;set;}="새 곡";
+ public string Title {get;set;}=UiText.T("t0150");
  public string Skeleton {get;set;}=Rig.BuiltinId;
  public TrackEdit Dance {get;set;}=new();
  public TrackEdit Camera {get;set;}=new();
@@ -65,7 +65,7 @@ public sealed class SongProject {
  public void Save(string path) {
   ProjectRules.Validate(this);
   string destination=System.IO.Path.GetFullPath(path);
-  if(new[]{Dance.Path,Camera.Path,Audio.Path,Skeleton}.Where(x=>!string.IsNullOrEmpty(x)&&!Rig.IsBuiltin(x)).Any(x=>string.Equals(System.IO.Path.GetFullPath(x),destination,StringComparison.OrdinalIgnoreCase)))throw new IOException("원본 파일 경로에는 프로젝트를 저장할 수 없습니다.");
+  if(new[]{Dance.Path,Camera.Path,Audio.Path,Skeleton}.Where(x=>!string.IsNullOrEmpty(x)&&!Rig.IsBuiltin(x)).Any(x=>string.Equals(System.IO.Path.GetFullPath(x),destination,StringComparison.OrdinalIgnoreCase)))throw new IOException(UiText.T("t0248"));
   var copy=JsonSerializer.Deserialize<SongProject>(JsonSerializer.Serialize(this,Json))!;copy.SchemaVersion=5;
   string folder=System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(path))!;
   foreach(var t in new[]{copy.Dance,copy.Camera,copy.Audio})
@@ -74,12 +74,12 @@ public sealed class SongProject {
   AtomicWrite(path,JsonSerializer.Serialize(copy,Json));
  }
  public static SongProject Load(string path) {
-  if(new FileInfo(path).Length>1024*1024)throw new InvalidDataException("프로젝트 파일이 너무 큽니다.");
-  var p=JsonSerializer.Deserialize<SongProject>(File.ReadAllText(path),Json)??throw new InvalidDataException("프로젝트를 읽을 수 없습니다.");
-  if(p.SchemaVersion!=5)throw new InvalidDataException("이 편집기는 독립 FPS 프로젝트 버전 5를 사용합니다. 이전 프로젝트는 새 프로젝트로 다시 만들어주세요.");
+  if(new FileInfo(path).Length>1024*1024)throw new InvalidDataException(UiText.T("t0249"));
+  var p=JsonSerializer.Deserialize<SongProject>(File.ReadAllText(path),Json)??throw new InvalidDataException(UiText.T("t0250"));
+  if(p.SchemaVersion!=5)throw new InvalidDataException(UiText.T("t0251"));
   using var raw=JsonDocument.Parse(File.ReadAllText(path));if(!raw.RootElement.TryGetProperty("CameraBoneManual",out _))p.CameraBoneManual=p.CameraBone>=0;if(!raw.RootElement.TryGetProperty("CameraForwardManual",out _))p.CameraForwardManual=raw.RootElement.TryGetProperty("CameraForward",out _);
   if(p.SchemaVersion<4)p.FovMode="Manual";
-  if(p.FovMode=="Auto")throw new InvalidDataException("이 버전에서는 확인된 원본 HKX FOV 추출기가 없습니다. 프로젝트의 FOV 모드를 Manual로 지정해야 합니다.");
+  if(p.FovMode=="Auto")throw new InvalidDataException(UiText.T("t0252"));
   ProjectRules.Validate(p);
   string folder=System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(path))!;
   foreach(var t in new[]{p.Dance,p.Camera,p.Audio})

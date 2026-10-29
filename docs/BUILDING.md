@@ -1,6 +1,6 @@
 # 빌드 안내
 
-## LDA:R 본 모드 — Skyrim SE 1.5.97 전용
+## LDA:R 본 모드 — SE 1.5.97 / Steam AE 1.6.640·1.6.1170
 
 Windows x64, Visual Studio 2022 C++ 도구, Windows SDK, Python 3가 필요합니다. 원래 빌드에는 MSVC 14.44를 사용했습니다. **x64 MSVC 개발자 명령 프롬프트**에서 실행하세요.
 
@@ -12,7 +12,7 @@ python tools/build_native.py --dependencies C:/dev/deps/installed --json-include
 
 `--commonlib-library`를 생략하면 저장소에 포함한 SDK의 소스 목록을 **ENABLE_SKYRIM_SE=1만 지정하여** 컴파일하고 `build/native/DanceStudio.dll`을 만듭니다. 몇 분 이상 걸릴 수 있으며 `--jobs`로 SDK 컴파일 작업 수를 조절할 수 있습니다.
 
-이미 빌드한 **정확히 대응하는 SE 전용** SDK 라이브러리가 있다면 다음 옵션을 추가합니다.
+이미 빌드한 **정확히 대응하는 SE+AE** SDK 라이브러리가 있다면 다음 옵션을 추가합니다.
 
 ```powershell
 --commonlib-library C:/dev/CommonLibSSE-SE.lib
@@ -22,7 +22,7 @@ python tools/build_native.py --dependencies C:/dev/deps/installed --json-include
 
 출력과 빌드 로그는 Git에서 제외한 `build/native/`에 저장됩니다. 컴파일러·PDB 경로와 타임스탬프에 따라 바이너리는 달라질 수 있으므로 기존 배포 DLL과 바이트 단위로 동일한 빌드라고 주장하지 않습니다. 원래 소스와의 동일성은 `source-provenance.json`에서 따로 확인합니다.
 
-공개 준비 과정에서는 포함된 헤더와 기존의 대응 SE 전용 SDK 라이브러리로 본 모드를 재빌드했습니다. **SDK 전체 재컴파일 경로와 새 컴퓨터의 의존성 초기 설치까지 다시 검증한 것은 아닙니다.**
+공개 준비 과정에서는 포함된 헤더와 기존의 대응 SE+AE SDK 라이브러리로 본 모드를 재빌드했습니다. **SDK 전체 재컴파일 경로와 새 컴퓨터의 의존성 초기 설치까지 다시 검증한 것은 아닙니다.**
 
 `data/`에는 텍스트 설정 예시만 있습니다. 실제 게임 설치에 필요한 데이터 ESL 등은 정상 전체 모드 설치본에서 확보하세요. 이 폴더만으로는 완전한 설치본이 되지 않습니다.
 
@@ -49,3 +49,7 @@ dotnet publish editor/DanceStudio.csproj -c Release --self-contained false -o bu
 C++ 및 C# 테스트 소스를 포함했습니다. 일부 테스트는 게임 또는 원본 HKX/WAV 자료가 필요하며, 이전 진단 코드에는 원래 MO2 자료 경로를 사용하는 부분도 남아 있습니다. 이 테스트 자료는 공개하지 않습니다. 깨끗한 저장소 복사본에서 외부 자료 없이 모든 테스트가 실행된다는 뜻은 아닙니다.
 
 소스 공개 도구는 Skyrim 게임 플레이를 검증하지 않습니다. AE 지원이나 모든 모드 조합에서 지연이 없는 오디오·카메라 동기화를 보장하지 않습니다.
+
+## 0.5.5 갱신
+
+네이티브 SDK와 플러그인 모두 SE+AE 정의를 사용합니다. 빌드 도구는 이번에 갱신했지만 이 공개 경로 구성으로 재빌드한 것은 아닙니다. 실제 배포 DLL은 로컬 빌드로 검증했습니다. 편집기는 0.5.0이며 python generate_versions.py 후 dotnet build editor/DanceStudio.csproj -c Release를 실행합니다. 외부 편집기 DLL/스켈레톤 준비 조건은 그대로입니다.

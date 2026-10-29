@@ -5,8 +5,8 @@ namespace DanceStudio;
 public static class Exporter {
  public static string Export(string parent,SongProject p,MotionClip? dance,MotionClip? camera,WaveAudio audio,Rig rig,bool gameAudio=false) {
   ProjectRules.Validate(p,true);
-  if(dance==null&&camera==null)throw new InvalidDataException("춤 또는 카메라 중 하나는 필요합니다.");
-  rig.EnsureSourceUnchanged();if(dance!=null){dance.EnsureSourceUnchanged();dance.ValidateRig(rig);p.Dance.Validate(dance.Duration);}if(camera!=null){FovPolicy.Value(p,camera,p.ExportIn);camera.EnsureSourceUnchanged();camera.ValidateRig(rig);CameraAnalysis.Validate(camera,rig,p.CameraBone);p.Camera.Validate(camera.Duration);if(camera.Animation.extractedMotion!=null)throw new NotSupportedException("카메라 루트 모션 출력은 미지원입니다.");}p.Audio.Validate(audio.Duration);
+  if(dance==null&&camera==null)throw new InvalidDataException(UiText.T("t0023"));
+  rig.EnsureSourceUnchanged();if(dance!=null){dance.EnsureSourceUnchanged();dance.ValidateRig(rig);p.Dance.Validate(dance.Duration);}if(camera!=null){FovPolicy.Value(p,camera,p.ExportIn);camera.EnsureSourceUnchanged();camera.ValidateRig(rig);CameraAnalysis.Validate(camera,rig,p.CameraBone);p.Camera.Validate(camera.Duration);if(camera.Animation.extractedMotion!=null)throw new NotSupportedException(UiText.T("t0024"));}p.Audio.Validate(audio.Duration);
   parent=System.IO.Path.GetFullPath(parent);
   string folder=System.IO.Path.Combine(parent,"DanceStudio-"+DateTime.Now.ToString("yyyyMMdd-HHmmss")+"-"+Guid.NewGuid().ToString("N")[..6]);
   Directory.CreateDirectory(folder);bool success=false;

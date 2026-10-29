@@ -20,7 +20,7 @@ public sealed class TimelineView:FrameworkElement {
   base.OnRender(d);d.DrawRectangle(new SolidColorBrush(Color.FromRgb(18,24,35)),null,new Rect(0,0,ActualWidth,ActualHeight));
   double step=Span>500?60:Span>180?30:Span>60?10:Span>20?5:1;
   for(double t=Math.Ceiling(ViewStart/step)*step;t<ViewStart+Span;t+=step){double x=X(t);d.DrawLine(new Pen(new SolidColorBrush(Color.FromRgb(41,51,66)),1),new(x,27),new(x,Top+Row*3));Text(d,Format(t),x+4,7);}
-  var tracks=new[]{Project.Dance,Project.Camera,Project.Audio};string[] names=["춤 · HKX","카메라 · HKX","음악 · 오디오"];
+  var tracks=new[]{Project.Dance,Project.Camera,Project.Audio};string[] names=[UiText.T("t0333"),UiText.T("t0334"),UiText.T("t0335")];
   d.PushClip(new RectangleGeometry(new Rect(Left,Top,WidthTime,Row*3)));
   for(int i=0;i<3;i++){
    double y=Top+i*Row+7;var t=tracks[i];if(t.Path.Length==0)continue;double x=X(t.Start),end=X(t.TimelineEnd);
@@ -34,14 +34,14 @@ public sealed class TimelineView:FrameworkElement {
   double begin=X(Project.ExportIn),finish=X(Project.ExportOut);
   if(finish>Left&&begin<ActualWidth){d.DrawLine(new Pen(Brushes.MediumAquamarine,3),new(Math.Max(Left,begin),Top+Row*3+4),new(Math.Min(ActualWidth-18,finish),Top+Row*3+4));}
   if(X(Playhead)>=Left&&X(Playhead)<=ActualWidth-18)d.DrawLine(new Pen(Brushes.White,1.5),new(X(Playhead),25),new(X(Playhead),Top+Row*3+10));
-  Text(d,"끝 손잡이: 자르기   ·   트랙 드래그: 이동 · 세로선/눈금: 탐색   ·   휠: 확대",Left,Top+Row*3+16,null,11);
+  Text(d,UiText.T("t0336"),Left,Top+Row*3+16,null,11);
  }
  internal ContextMenu? TrackMenu(Point p){
   if(p.X<Left||p.X>ActualWidth-18||p.Y<Top)return null;
   int i=(int)((p.Y-Top)/Row);if(i<0||i>2)return null;
   var track=new[]{Project.Dance,Project.Camera,Project.Audio}[i];double y=Top+i*Row+7;
   if(track.Path.Length==0||p.Y<y||p.Y>y+42||p.X<X(track.Start)||p.X>X(track.TimelineEnd))return null;
-  var menu=new ContextMenu();var item=new MenuItem{Header="트랙 삭제"};item.Click+=(_,_)=>{CancelDrag();RemoveTrack?.Invoke(i);InvalidateVisual();};menu.Items.Add(item);return menu;
+  var menu=new ContextMenu();var item=new MenuItem{Header=UiText.T("t0337")};item.Click+=(_,_)=>{CancelDrag();RemoveTrack?.Invoke(i);InvalidateVisual();};menu.Items.Add(item);return menu;
  }
  void Down(object sender,MouseButtonEventArgs e){if(e.ChangedButton==MouseButton.Right){CancelDrag();var menu=TrackMenu(e.GetPosition(this));if(menu!=null){menu.PlacementTarget=this;menu.IsOpen=true;}e.Handled=true;return;}if(e.ChangedButton!=MouseButton.Left)return;PointerDown(e.GetPosition(this));e.Handled=true;}
  internal void PointerDown(Point p){Focus();if(p.X<Left||p.X>ActualWidth-18)return;if(p.Y<Top||Math.Abs(p.X-X(Playhead))<6){scrubbing=true;CaptureMouse();Seek?.Invoke(Math.Clamp(Time(p.X),0,ProjectRules.MaxProjectTime));return;}int i=(int)((p.Y-Top)/Row);if(i>=0&&i<3){Selected?.Invoke(i);var track=new[]{Project.Dance,Project.Camera,Project.Audio}[i];double a=X(track.Start),b=X(track.TimelineEnd);if(track.Path.Length>0&&p.X>=a-8&&p.X<=b+8){edge=Math.Abs(p.X-a)<7?-1:Math.Abs(p.X-b)<7?1:0;drag=i;initial=p.X;oldIn=track.In;oldOut=track.Out;oldStart=track.Start;CaptureMouse();return;}}Seek?.Invoke(Time(p.X));}

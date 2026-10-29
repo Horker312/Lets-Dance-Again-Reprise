@@ -23,6 +23,6 @@ public static class ModLocation {
   for(var dir=new DirectoryInfo(Path.GetFullPath(baseDirectory));dir!=null;dir=dir.Parent)if(dir.Name.Equals("Tools",StringComparison.OrdinalIgnoreCase)&&dir.Parent?.Parent is DirectoryInfo container)try{var matches=container.EnumerateDirectories().Take(513).Select(d=>ResolveRoot(d.FullName)).Where(x=>x!=null).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();if(matches.Length==1)return matches[0];}catch(IOException){}catch(UnauthorizedAccessException){}
   return null;
  }
- public static string Select(string directory){var root=ResolveRoot(directory)??throw new InvalidDataException("LDA:R의 ESL·DLL·곡 패키지가 있는 Reprise 모드 폴더를 선택하세요.");Directory.CreateDirectory(Path.GetDirectoryName(Cache)!);SongProject.AtomicWrite(Cache,root);return root;}
+ public static string Select(string directory){var root=ResolveRoot(directory)??throw new InvalidDataException(UiText.T("t0253"));Directory.CreateDirectory(Path.GetDirectoryName(Cache)!);SongProject.AtomicWrite(Cache,root);return root;}
  public static string Library(string root)=>Path.Combine(root,GameExporter.LibraryRelative);
 }

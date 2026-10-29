@@ -1,4 +1,5 @@
 #pragma once
+#include "Localization.h"
 #include <Windows.h>
 #include <nlohmann/json.hpp>
 #include <atomic>
@@ -24,10 +25,10 @@ inline bool Allowed(unsigned k, unsigned menu) {
     return false;
 }
 inline std::string Validate(Bindings k, unsigned menu) {
-    if(k.pause!=57)return "일시정지 키는 Space입니다.";
-    if (!k.stop) return "중단 키는 반드시 지정해야 합니다.";
+    if(k.pause!=57)return L10n::T("r0037");
+    if (!k.stop) return L10n::T("r0038");
     std::array<unsigned,5> keys{k.start,k.stop,k.hud,k.photo,k.pause};
-    for(size_t i=0;i<keys.size();++i){if(!Allowed(keys[i],menu))return "콘솔·저장/불러오기·IME 예약 키는 사용할 수 없습니다.";for(size_t j=0;j<i;++j)if(keys[i]&&keys[i]==keys[j])return "같은 키를 두 기능에 지정할 수 없습니다.";}
+    for(size_t i=0;i<keys.size();++i){if(!Allowed(keys[i],menu))return L10n::T("r0039");for(size_t j=0;j<i;++j)if(keys[i]&&keys[i]==keys[j])return L10n::T("r0040");}
     return {};
 }
 inline Bindings Defaults(unsigned menu) {
@@ -53,22 +54,22 @@ public:
         auto fallback=Legacy(legacy,menu); active=Pack(fallback)|CameraBit;
         try {
             if (!std::filesystem::exists(path)) return {};
-            if (std::filesystem::file_size(path)>16384) throw std::runtime_error("설정 파일이 너무 큽니다.");
+            if (std::filesystem::file_size(path)>16384) throw std::runtime_error(L10n::T("r0041"));
             std::ifstream in(path); auto j=nlohmann::json::parse(in);
             if (!j.is_object() || !j.contains("schemaVersion") || !j["schemaVersion"].is_number_integer() || (j["schemaVersion"] != 1&&j["schemaVersion"] != 2&&j["schemaVersion"] != 3&&j["schemaVersion"] != 4&&j["schemaVersion"] != 5&&j["schemaVersion"] != 6&&j["schemaVersion"] != 7&&j["schemaVersion"] != 8))
-                throw std::runtime_error("지원하지 않는 설정 버전입니다.");
+                throw std::runtime_error(L10n::T("r0042"));
             auto key=[&](const char* name) {
                 const auto& v=j.at(name);
-                if (!v.is_number_integer() || v<0 || v>255) throw std::runtime_error("키 값이 잘못되었습니다.");
+                if (!v.is_number_integer() || v<0 || v>255) throw std::runtime_error(L10n::T("r0043"));
                 return v.get<unsigned>();
             };
             Bindings k{key("prepareStart"),key("stop"),j["schemaVersion"]>=3?key("toggleHUD"):0,j["schemaVersion"]>=6?key("openPhotoMode"):0,57};
             if(j["schemaVersion"]<6)k=Legacy(k,menu);
             auto error=Validate(k,menu); if (!error.empty()) throw std::runtime_error(error);
-            bool camera=true;if(j["schemaVersion"]>=2&&j["schemaVersion"]<=7){if(!j.at("useDedicatedCamera").is_boolean())throw std::runtime_error("카메라 설정이 잘못되었습니다.");camera=j.at("useDedicatedCamera").get<bool>();}
-            bool native=false;if(j["schemaVersion"]>=4){if(!j.at("nativePlayback").is_boolean())throw std::runtime_error("재생 방식 설정이 잘못되었습니다.");native=j.at("nativePlayback").get<bool>();}
+            bool camera=true;if(j["schemaVersion"]>=2&&j["schemaVersion"]<=7){if(!j.at("useDedicatedCamera").is_boolean())throw std::runtime_error(L10n::T("r0044"));camera=j.at("useDedicatedCamera").get<bool>();}
+            bool native=false;if(j["schemaVersion"]>=4){if(!j.at("nativePlayback").is_boolean())throw std::runtime_error(L10n::T("r0045"));native=j.at("nativePlayback").get<bool>();}
             active=Pack(k)|(camera?CameraBit:0)|(native?NativeBit:0); return {};
-        } catch (const std::exception& e) { return std::string("설정 불러오기 실패; 기존 INI/기본 키 사용: ")+e.what(); }
+        } catch (const std::exception& e) { return std::string(L10n::T("r0046"))+e.what(); }
     }
     bool Save(Bindings k,unsigned menu,std::string& error){return Save(k,menu,error,UseCamera());}
     bool Save(Bindings k,unsigned menu,std::string& error,bool camera){return Save(k,menu,error,camera,NativePlayback());}
@@ -85,15 +86,15 @@ public:
                 temp=path; temp+=L".tmp."+std::to_wstring(GetCurrentProcessId())+L"."+std::to_wstring(serial.fetch_add(1));
                 file=CreateFileW(temp.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);
                 if (file!=INVALID_HANDLE_VALUE) { ownsTemp=true; break; }
-                if (GetLastError()!=ERROR_FILE_EXISTS) throw std::runtime_error("임시 설정 파일을 만들 수 없습니다.");
+                if (GetLastError()!=ERROR_FILE_EXISTS) throw std::runtime_error(L10n::T("r0047"));
             }
-            if (file==INVALID_HANDLE_VALUE) { temp.clear(); throw std::runtime_error("임시 설정 파일 이름을 확보하지 못했습니다."); }
+            if (file==INVALID_HANDLE_VALUE) { temp.clear(); throw std::runtime_error(L10n::T("r0048")); }
             DWORD wrote{};
             if (!WriteFile(file,bytes.data(),static_cast<DWORD>(bytes.size()),&wrote,nullptr) || wrote!=bytes.size() || !FlushFileBuffers(file))
-                throw std::runtime_error("설정 파일 기록에 실패했습니다.");
+                throw std::runtime_error(L10n::T("r0049"));
             CloseHandle(file); file=INVALID_HANDLE_VALUE;
             if (!MoveFileExW(temp.c_str(),path.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH))
-                throw std::runtime_error("설정 파일 교체에 실패했습니다. 기존 설정을 유지합니다.");
+                throw std::runtime_error(L10n::T("r0050"));
             temp.clear(); active=Pack(k)|(camera?CameraBit:0)|(native?NativeBit:0); return true;
         } catch (const std::exception& e) {
             if (file!=INVALID_HANDLE_VALUE) CloseHandle(file);

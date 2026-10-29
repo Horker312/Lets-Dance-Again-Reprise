@@ -12,13 +12,13 @@ public static class FovTests {
   Check(!FovPolicy.HasVerifiedSource(unknown),"No source-name or float-index heuristic");
   string? firstDance=null,firstMusic=null;
   foreach(double value in new[]{30.0,45.0,60.0,70.0}){
-   var p=SongProject.Load(projectPath);p.Fov=value;p.ExportOut=2;p.Save(Path.Combine(output,"manual.danceproj"));var saved=SongProject.Load(Path.Combine(output,"manual.danceproj"));Check(saved.Fov==value&&saved.FovMode=="Manual"&&saved.SchemaVersion==4,"Manual FOV saved exactly");
+   var p=SongProject.Load(projectPath);p.Fov=value;p.ExportOut=2;p.Save(Path.Combine(output,"manual.danceproj"));var saved=SongProject.Load(Path.Combine(output,"manual.danceproj"));Check(saved.Fov==value&&saved.FovMode=="Manual"&&saved.SchemaVersion==5,"Manual FOV saved exactly");
    Check(FovPolicy.Value(p,camera,0)==value&&FovPolicy.Value(p,camera,1)==value,"Preview uses explicit manual FOV");
    var folder=GameExporter.Export(output,p,dance,camera,audio,rig);using var doc=JsonDocument.Parse(File.ReadAllText(Path.Combine(folder,"camera.samples.json")));Check(doc.RootElement.GetProperty("fov").GetDouble()==value&&doc.RootElement.GetProperty("schemaVersion").GetInt32()==1,"Manual export retains schema 1 and exact value");
    var dh=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Path.Combine(folder,"mt_idle.hkx"))));var mh=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Path.Combine(folder,"music.wav"))));if(firstDance==null){firstDance=dh;firstMusic=mh;}else{Check(firstDance==dh&&firstMusic==mh,"FOV changes do not change dance HKX or music");}
    File.WriteAllText(Path.Combine(output,$"manual-{value}.txt"),Path.Combine(folder,"camera.samples.json"));
   }
-  foreach(int version in new[]{1,2,3}){var raw=JsonSerializer.SerializeToNode(original,SongProject.Json)!;raw["SchemaVersion"]=version;raw["Fov"]=70;raw["FovMode"]="Auto";var path=Path.Combine(output,"old.danceproj");File.WriteAllText(path,raw.ToJsonString());var old=SongProject.Load(path);Check(old.Fov==70&&old.FovMode=="Manual","Legacy project always migrates to manual without changing value");}
+  foreach(int version in new[]{1,2,3}){var raw=JsonSerializer.SerializeToNode(original,SongProject.Json)!;raw["SchemaVersion"]=version;raw["Fov"]=70;raw["FovMode"]="Auto";var path=Path.Combine(output,"old.danceproj");File.WriteAllText(path,raw.ToJsonString());Reject(()=>SongProject.Load(path),"pre-independent-FPS schema is rejected explicitly");}
   original.FovMode="Auto";Reject(()=>FovPolicy.Value(original,camera,0),"Unknown Auto fails explicitly, never falls back to 45");
   foreach(double bad in new[]{double.NaN,double.PositiveInfinity,0,4.99,140.01})Reject(()=>FovPolicy.Valid(bad),"Invalid FOV rejected");
   foreach(double aspect in new[]{4.0/3,16.0/9,21.0/9})foreach(double fov in new[]{30.0,45.0,60.0,70.0}){

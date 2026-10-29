@@ -1,15 +1,21 @@
 <Project Sdk="Microsoft.NET.Sdk">
+ <Import Project="../versions.props" />
  <PropertyGroup>
   <OutputType>WinExe</OutputType><TargetFramework>net10.0-windows</TargetFramework>
   <UseWPF>true</UseWPF><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
-  <AssemblyName>DanceStudio</AssemblyName><Version>0.4.10</Version>
+  <AssemblyName>DanceStudio</AssemblyName><Version>$(DanceStudioVersion)</Version>
   <NuGetAudit>false</NuGetAudit><RestoreIgnoreFailedSources>true</RestoreIgnoreFailedSources>
  </PropertyGroup>
  <ItemGroup>
+  <EmbeddedResource Include="Resources/Locales/ko.json" LogicalName="DanceStudio.Locale.ko.json" />
+  <EmbeddedResource Include="Resources/Locales/en.json" LogicalName="DanceStudio.Locale.en.json" />
   <EmbeddedResource Include="Resources/skeleton_female.hkx" LogicalName="DanceStudio.DefaultSkeleton.hkx" />
   <Reference Include="HKX2E"><HintPath>lib/HKX2E.dll</HintPath></Reference>
   <Reference Include="MemoryPack.Core"><HintPath>lib/MemoryPack.Core.dll</HintPath></Reference>
   <Reference Include="Riok.Mapperly.Abstractions"><HintPath>lib/Riok.Mapperly.Abstractions.dll</HintPath></Reference>
   <Reference Include="Matcher"><HintPath>lib/Matcher.dll</HintPath><Private>true</Private></Reference>
  </ItemGroup>
+ <Target Name="CheckProductVersions" BeforeTargets="BeforeBuild">
+  <Exec Command="python &quot;$(MSBuildProjectDirectory)/../generate_versions.py&quot; --check" />
+ </Target>
 </Project>

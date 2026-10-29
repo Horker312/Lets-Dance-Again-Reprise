@@ -1,4 +1,5 @@
 #pragma once
+#include "Localization.h"
 #include <cstring>
 #include <algorithm>
 #include <array>
@@ -15,31 +16,84 @@ using Json=nlohmann::json;
 struct Vec {double x{},y{},z{}; Vec operator+(Vec b)const{return{x+b.x,y+b.y,z+b.z};} Vec operator-(Vec b)const{return{x-b.x,y-b.y,z-b.z};} Vec operator*(double b)const{return{x*b,y*b,z*b};}};
 inline double Dot(Vec a,Vec b){return a.x*b.x+a.y*b.y+a.z*b.z;}
 inline Vec Cross(Vec a,Vec b){return{a.y*b.z-a.z*b.y,a.z*b.x-a.x*b.z,a.x*b.y-a.y*b.x};}
-inline Vec Unit(Vec a){double n=std::sqrt(Dot(a,a));if(!std::isfinite(n)||n<1e-8)throw std::runtime_error("Invalid camera axis");return a*(1/n);}
+inline Vec Unit(Vec a){double n=std::sqrt(Dot(a,a));if(!std::isfinite(n)||n<1e-8)throw std::runtime_error(L10n::T("r0051"));return a*(1/n);}
 struct Quat {double x{},y{},z{},w{1}; Quat Inv()const{return{-x,-y,-z,w};} Quat operator*(Quat b)const{return{w*b.x+x*b.w+y*b.z-z*b.y,w*b.y-x*b.z+y*b.w+z*b.x,w*b.z+x*b.y-y*b.x+z*b.w,w*b.w-x*b.x-y*b.y-z*b.z};} Vec Apply(Vec a)const{auto q=(*this)*Quat{a.x,a.y,a.z,0}*Inv();return{q.x,q.y,q.z};}};
-inline Quat Unit(Quat q){double n=std::sqrt(q.x*q.x+q.y*q.y+q.z*q.z+q.w*q.w);if(!std::isfinite(n)||n<.1)throw std::runtime_error("Invalid camera quaternion");return{q.x/n,q.y/n,q.z/n,q.w/n};}
+inline Quat Unit(Quat q){double n=std::sqrt(q.x*q.x+q.y*q.y+q.z*q.z+q.w*q.w);if(!std::isfinite(n)||n<.1)throw std::runtime_error(L10n::T("r0052"));return{q.x/n,q.y/n,q.z/n,q.w/n};}
 inline Quat Slerp(Quat a,Quat b,double t){double d=a.x*b.x+a.y*b.y+a.z*b.z+a.w*b.w;if(d<0){b={-b.x,-b.y,-b.z,-b.w};d=-d;}double u=1-t,v=t;if(d<.9995){double theta=std::acos(std::clamp(d,-1.,1.)),s=std::sin(theta);u=std::sin((1-t)*theta)/s;v=std::sin(t*theta)/s;}return Unit(Quat{a.x*u+b.x*v,a.y*u+b.y*v,a.z*u+b.z*v,a.w*u+b.w*v});}
 inline Quat Yaw(double angle){return{0,0,std::sin(angle/2),std::cos(angle/2)};}
 // A right-handed camera frame: local +Y looks forward, local +Z is up.
 inline Quat Look(Vec f,Vec up){f=Unit(f);Vec r=Unit(Cross(f,up));Vec u=Unit(Cross(r,f));double m[3][3]={{r.x,f.x,u.x},{r.y,f.y,u.y},{r.z,f.z,u.z}};Quat q;double tr=m[0][0]+m[1][1]+m[2][2];if(tr>0){double s=std::sqrt(tr+1)*2;q={(m[2][1]-m[1][2])/s,(m[0][2]-m[2][0])/s,(m[1][0]-m[0][1])/s,.25*s};}else{int i=m[1][1]>m[0][0]?1:0;if(m[2][2]>m[i][i])i=2;int j=(i+1)%3,k=(i+2)%3;double s=std::sqrt(1+m[i][i]-m[j][j]-m[k][k])*2;double v[4]{};v[i]=s*.25;v[j]=(m[j][i]+m[i][j])/s;v[k]=(m[k][i]+m[i][k])/s;v[3]=(m[k][j]-m[j][k])/s;q={v[0],v[1],v[2],v[3]};}return Unit(q);}
-inline double Number(const Json& j){double v=j.get<double>();if(!std::isfinite(v))throw std::runtime_error("Non-finite track value");return v;}
-inline Vec ReadVec(const Json& j){if(!j.is_array()||j.size()!=3)throw std::runtime_error("Bad position array");Vec p{Number(j[0]),Number(j[1]),Number(j[2])};if(std::max({std::abs(p.x),std::abs(p.y),std::abs(p.z)})>20000)throw std::runtime_error("Camera exceeds 20000 unit stage");return p;}
-inline Quat ReadQuat(const Json& j){if(!j.is_array()||j.size()!=4)throw std::runtime_error("Bad quaternion array");return Unit(Quat{Number(j[0]),Number(j[1]),Number(j[2]),Number(j[3])});}
-inline std::vector<char> ReadBytes(const std::filesystem::path& p,std::uintmax_t max){auto n=std::filesystem::file_size(p);if(n>max||!n)throw std::runtime_error("Missing or oversized file: "+p.filename().string());std::ifstream f(p,std::ios::binary);std::vector<char>b(static_cast<size_t>(n));if(!f.read(b.data(),b.size()))throw std::runtime_error("File read failed");return b;}
+inline double Number(const Json& j){double v=j.get<double>();if(!std::isfinite(v))throw std::runtime_error(L10n::T("r0053"));return v;}
+inline Vec ReadVec(const Json& j){if(!j.is_array()||j.size()!=3)throw std::runtime_error(L10n::T("r0054"));Vec p{Number(j[0]),Number(j[1]),Number(j[2])};if(std::max({std::abs(p.x),std::abs(p.y),std::abs(p.z)})>20000)throw std::runtime_error(L10n::T("r0055"));return p;}
+inline Quat ReadQuat(const Json& j){if(!j.is_array()||j.size()!=4)throw std::runtime_error(L10n::T("r0056"));return Unit(Quat{Number(j[0]),Number(j[1]),Number(j[2]),Number(j[3])});}
+inline std::vector<char> ReadBytes(const std::filesystem::path& p,std::uintmax_t max){auto n=std::filesystem::file_size(p);if(n>max||!n)throw std::runtime_error(L10n::T("r0057")+p.filename().string());std::ifstream f(p,std::ios::binary);std::vector<char>b(static_cast<size_t>(n));if(!f.read(b.data(),b.size()))throw std::runtime_error(L10n::T("r0058"));return b;}
 inline Json ReadJson(const std::filesystem::path& p,std::uintmax_t max=32*1024*1024){auto b=ReadBytes(p,max);return Json::parse(b);}
-inline std::filesystem::path RelativeFile(const std::filesystem::path& root,const std::string& name){auto p=std::filesystem::u8path(name);if(p.empty()||p.is_absolute()||p.has_root_path())throw std::runtime_error("Track path must be relative");for(auto&c:p)if(c=="..")throw std::runtime_error("Track path traversal rejected");// Keep logical Data paths: resolving physical paths breaks MO2/USVFS redirects.
- auto logicalRoot=std::filesystem::absolute(root).lexically_normal();auto full=(logicalRoot/p).lexically_normal();auto rel=full.lexically_relative(logicalRoot);if(rel.empty()||*rel.begin()=="..")throw std::runtime_error("Track outside package");return full;}
-struct Sample {double time;Vec pos;Quat rot;double fov{45};};
-struct CameraTrack {std::vector<Sample> samples;Vec forward{0,1,0};double fov{45},yaw{},duration{},heightOffset{};
- static CameraTrack Read(const Json& j,double expected){CameraTrack c;if(j.contains("heightOffset")){c.heightOffset=Number(j.at("heightOffset"));if(std::abs(c.heightOffset)>20000)throw std::runtime_error("Invalid camera height offset");}const auto version=j.at("schemaVersion");if(!version.is_number_integer()||(version!=1&&version!=2))throw std::runtime_error("Unsupported camera schema");if(version==2&&j.at("fovConvention")!="skyrimWorldDegrees")throw std::runtime_error("Unsupported FOV convention");c.duration=Number(j.at("duration"));if(std::abs(c.duration-expected)>.002)throw std::runtime_error("Camera duration mismatch");c.fov=Number(j.at("fov"));c.yaw=Number(j.at("yawDegrees"))*3.141592653589793/180.;if(c.fov<5||c.fov>140||std::abs(c.yaw)>64)throw std::runtime_error("Invalid camera settings");std::string axis=j.at("forward");if(axis=="-Y")c.forward={0,-1,0};else if(axis=="+X")c.forward={1,0,0};else if(axis=="-X")c.forward={-1,0,0};else if(axis=="+Z")c.forward={0,0,1};else if(axis=="-Z")c.forward={0,0,-1};else if(axis!="+Y")throw std::runtime_error("Unknown camera axis");const auto& rows=j.at("samples");if(rows.size()<2||rows.size()>216002)throw std::runtime_error("Invalid sample count");for(auto&r:rows){Sample s{Number(r.at("time")),ReadVec(r.at("position")),ReadQuat(r.at("rotation")),version==2?Number(r.at("fov")):c.fov};if(s.fov<5||s.fov>140)throw std::runtime_error("Invalid animated FOV");if((!c.samples.empty()&&s.time<=c.samples.back().time)||s.time<0||s.time>expected+.002)throw std::runtime_error("Non-monotonic camera samples");c.samples.push_back(s);}if(std::abs(c.samples.front().time)>.0001||std::abs(c.samples.back().time-expected)>.002)throw std::runtime_error("Incomplete camera track");return c;}
- Sample At(double t)const{t=std::clamp(t,0.,duration);auto it=std::upper_bound(samples.begin(),samples.end(),t,[](double x,const Sample&s){return x<s.time;});if(it==samples.begin())return *it;if(it==samples.end())return samples.back();const auto&a=*(it-1);const auto&b=*it;double k=(t-a.time)/(b.time-a.time);return{t,a.pos+(b.pos-a.pos)*k,Slerp(a.rot,b.rot,k),a.fov+(b.fov-a.fov)*k};}
+inline std::filesystem::path RelativeFile(const std::filesystem::path& root,const std::string& name){auto p=std::filesystem::u8path(name);if(p.empty()||p.is_absolute()||p.has_root_path())throw std::runtime_error(L10n::T("r0059"));for(auto&c:p)if(c=="..")throw std::runtime_error(L10n::T("r0060"));// Keep logical Data paths: resolving physical paths breaks MO2/USVFS redirects.
+ auto logicalRoot=std::filesystem::absolute(root).lexically_normal();auto full=(logicalRoot/p).lexically_normal();auto rel=full.lexically_relative(logicalRoot);if(rel.empty()||*rel.begin()=="..")throw std::runtime_error(L10n::T("r0061"));return full;}
+struct Sample {double time;Vec pos;Quat rot;double fov{45};Vec referencePosition{};Quat referenceRotation{};bool cut{},referenceCut{};};
+struct CameraTrack {
+ std::vector<Sample> samples;Vec forward{0,1,0},movementPivot{};
+ double fov{45},yaw{},duration{},heightOffset{},referenceScale{1};bool referenceWorld{};
+ Vec RelativePosition(const Sample&s)const{return referenceWorld?s.referenceRotation.Inv().Apply(s.pos-s.referencePosition):s.pos;}
+ static CameraTrack Read(const Json&j,double expected){
+  CameraTrack c;
+  if(!std::isfinite(expected)||expected<=0||expected>1800)throw std::runtime_error(L10n::T("r0065"));
+  if(j.contains("heightOffset")){c.heightOffset=Number(j.at("heightOffset"));if(std::abs(c.heightOffset)>20000)throw std::runtime_error(L10n::T("r0062"));}
+  const auto version=j.at("schemaVersion");if(!version.is_number_integer()||(version!=1&&version!=2&&version!=3))throw std::runtime_error(L10n::T("r0063"));
+  if(version>=2&&j.at("fovConvention")!="skyrimWorldDegrees")throw std::runtime_error(L10n::T("r0064"));
+  auto space=j.value("coordinateSpace",std::string("actor-local"));
+  if(space!="actor-local"&&space!="reference-world")throw std::runtime_error(L10n::T("r0164"));
+  if(!j.contains("coordinateSpace")&&j.contains("coordinates")&&j.at("coordinates")!="Skyrim Z-up, source rig world space")throw std::runtime_error(L10n::T("r0164"));
+  c.referenceWorld=space=="reference-world";
+  // New coordinate/cut contracts use v3 so older runtimes reject them instead
+  // of silently ignoring essential reference metadata. Existing v1/v2 stay intact.
+  if(version!=3&&(c.referenceWorld||j.contains("referenceScale")||j.contains("movementPivot")))throw std::runtime_error(L10n::T("r0063"));
+  if(j.contains("referenceScale")){c.referenceScale=Number(j.at("referenceScale"));if(c.referenceScale<=0||c.referenceScale>100)throw std::runtime_error(L10n::T("r0165"));}
+  c.duration=Number(j.at("duration"));if(std::abs(c.duration-expected)>.002)throw std::runtime_error(L10n::T("r0065"));
+  c.fov=Number(j.at("fov"));c.yaw=Number(j.at("yawDegrees"))*3.141592653589793/180.;
+  if(c.fov<5||c.fov>140||std::abs(c.yaw)>64)throw std::runtime_error(L10n::T("r0066"));
+  std::string axis=j.at("forward");if(axis=="-Y")c.forward={0,-1,0};else if(axis=="+X")c.forward={1,0,0};else if(axis=="-X")c.forward={-1,0,0};else if(axis=="+Z")c.forward={0,0,1};else if(axis=="-Z")c.forward={0,0,-1};else if(axis!="+Y")throw std::runtime_error(L10n::T("r0067"));
+  const auto&rows=j.at("samples");if(rows.size()<2||rows.size()>216002)throw std::runtime_error(L10n::T("r0068"));
+  for(auto&r:rows){
+   Sample s{Number(r.at("time")),ReadVec(r.at("position")),ReadQuat(r.at("rotation")),version==2||(version==3&&r.contains("fov"))?Number(r.at("fov")):c.fov};
+   if(s.fov<5||s.fov>140)throw std::runtime_error(L10n::T("r0069"));
+   if((!c.samples.empty()&&s.time<=c.samples.back().time)||s.time<0||s.time>expected+.002)throw std::runtime_error(L10n::T("r0070"));
+   if(r.contains("cut")){if(!r.at("cut").is_boolean())throw std::runtime_error(L10n::T("r0166"));s.cut=r.at("cut").get<bool>();}
+   if(r.contains("referenceCut")){if(!r.at("referenceCut").is_boolean())throw std::runtime_error(L10n::T("r0166"));s.referenceCut=r.at("referenceCut").get<bool>();}
+   if(version!=3&&(s.cut||s.referenceCut))throw std::runtime_error(L10n::T("r0063"));
+   if(c.referenceWorld){s.referencePosition=ReadVec(r.at("referencePosition"));s.referenceRotation=ReadQuat(r.at("referenceRotation"));}
+   else if(r.contains("referencePosition")||r.contains("referenceRotation"))throw std::runtime_error(L10n::T("r0164"));
+   c.samples.push_back(s);
+  }
+  if(std::abs(c.samples.front().time)>.0001||std::abs(c.samples.back().time-expected)>.002)throw std::runtime_error(L10n::T("r0071"));
+  if(j.contains("movementPivot"))c.movementPivot=ReadVec(j.at("movementPivot"));
+  else{
+   // Deterministic whole-track pivot for optional user effects. It is not an
+   // inferred author anchor/cut. Actor-local linear segments integrate exactly;
+   // explicitly marked cuts hold the prior key up to the new timestamp.
+   Vec integral{};
+   for(size_t i=1;i<c.samples.size();++i){auto&a=c.samples[i-1];auto&b=c.samples[i];auto end=b;if(b.cut)end.pos=a.pos;if(b.referenceCut){end.referencePosition=a.referencePosition;end.referenceRotation=a.referenceRotation;}auto start=c.RelativePosition(a);integral=integral+(start+c.RelativePosition(end))*.5*(b.time-a.time);}
+   c.movementPivot=integral*(1./(c.samples.back().time-c.samples.front().time));
+  }
+  return c;
+ }
+ Sample At(double t)const{
+  t=std::clamp(t,0.,duration);auto it=std::upper_bound(samples.begin(),samples.end(),t,[](double x,const Sample&s){return x<s.time;});
+  if(it==samples.begin())return *it;if(it==samples.end())return samples.back();
+  const auto&a=*(it-1);const auto&b=*it;
+  double k=(t-a.time)/(b.time-a.time);
+  // Camera cuts must not freeze a separately moving source actor.
+  return{t,b.cut?a.pos:a.pos+(b.pos-a.pos)*k,b.cut?a.rot:Slerp(a.rot,b.rot,k),b.cut?a.fov:a.fov+(b.fov-a.fov)*k,b.referenceCut?a.referencePosition:a.referencePosition+(b.referencePosition-a.referencePosition)*k,b.referenceCut?a.referenceRotation:Slerp(a.referenceRotation,b.referenceRotation,k)};
+ }
  Quat Direction(Quat q)const{q=Unit(q*Yaw(yaw));Vec f=q.Apply(forward),up=q.Apply({0,0,1});if(std::abs(Dot(Unit(f),Unit(up)))>.99)up=q.Apply({0,1,0});return Look(f,up);}
+ Quat Direction(const Sample&s)const{return referenceWorld?Unit(s.referenceRotation.Inv()*Direction(s.rot)):Direction(s.rot);}
 };
+
 struct Wave {std::vector<char> pcm;std::uint32_t rate{};std::uint16_t channels{};std::uint64_t Frames()const{return pcm.size()/(channels*2);} };
-inline Wave ReadWave(const std::vector<char>& b,double duration){auto u16=[&](size_t x){if(x+2>b.size())throw std::runtime_error("Truncated WAV");return static_cast<std::uint16_t>(static_cast<unsigned char>(b[x])|(static_cast<unsigned char>(b[x+1])<<8));};auto u32=[&](size_t x){return std::uint32_t(u16(x))|(std::uint32_t(u16(x+2))<<16);};if(b.size()<12||std::string(b.data(),4)!="RIFF"||std::string(b.data()+8,4)!="WAVE"||u32(4)!=b.size()-8)throw std::runtime_error("Invalid RIFF file");Wave w;bool fmt=false,data=false;for(size_t x=12;x+8<=b.size();){auto n=u32(x+4);if(n>b.size()-x-8)throw std::runtime_error("Truncated WAV chunk");std::string id(b.data()+x,4);if(id=="fmt "){if(fmt||n<16||u16(x+8)!=1||u16(x+22)!=16)throw std::runtime_error("Runtime needs PCM16 WAV");w.channels=u16(x+10);w.rate=u32(x+12);if((w.channels!=1&&w.channels!=2)||w.rate<8000||w.rate>192000||u16(x+20)!=w.channels*2||u32(x+16)!=w.rate*w.channels*2)throw std::runtime_error("Invalid PCM format");fmt=true;}if(id=="data"){if(data)throw std::runtime_error("Duplicate WAV data");w.pcm.assign(b.begin()+x+8,b.begin()+x+8+n);data=true;}x+=8+std::size_t(n)+(n&1);}if(!fmt||!data||w.pcm.empty()||w.pcm.size()%(w.channels*2)||std::abs(double(w.Frames())/w.rate-duration)>2./w.rate)throw std::runtime_error("Audio duration mismatch");return w;}
+inline Wave ReadWave(const std::vector<char>& b,double duration){auto u16=[&](size_t x){if(x+2>b.size())throw std::runtime_error(L10n::T("r0072"));return static_cast<std::uint16_t>(static_cast<unsigned char>(b[x])|(static_cast<unsigned char>(b[x+1])<<8));};auto u32=[&](size_t x){return std::uint32_t(u16(x))|(std::uint32_t(u16(x+2))<<16);};if(b.size()<12||std::string(b.data(),4)!="RIFF"||std::string(b.data()+8,4)!="WAVE"||u32(4)!=b.size()-8)throw std::runtime_error(L10n::T("r0073"));Wave w;bool fmt=false,data=false;for(size_t x=12;x+8<=b.size();){auto n=u32(x+4);if(n>b.size()-x-8)throw std::runtime_error(L10n::T("r0074"));std::string id(b.data()+x,4);if(id=="fmt "){if(fmt||n<16||u16(x+8)!=1||u16(x+22)!=16)throw std::runtime_error(L10n::T("r0075"));w.channels=u16(x+10);w.rate=u32(x+12);if((w.channels!=1&&w.channels!=2)||w.rate<8000||w.rate>192000||u16(x+20)!=w.channels*2||u32(x+16)!=w.rate*w.channels*2)throw std::runtime_error(L10n::T("r0076"));fmt=true;}if(id=="data"){if(data)throw std::runtime_error(L10n::T("r0077"));w.pcm.assign(b.begin()+x+8,b.begin()+x+8+n);data=true;}x+=8+std::size_t(n)+(n&1);}if(!fmt||!data||w.pcm.empty()||w.pcm.size()%(w.channels*2)||std::abs(double(w.Frames())/w.rate-duration)>2./w.rate)throw std::runtime_error(L10n::T("r0078"));return w;}
 struct Song {std::filesystem::path root;std::string id,title,submod;std::uint32_t token{};double duration{};Json manifest;bool embedded{};bool HasDance()const{return manifest.contains("dance");}bool HasCamera()const{return manifest.contains("cameraSamples");}std::uint64_t exportedAt{};};
-inline Song ReadSong(const std::filesystem::path&p){Song s;s.root=p.parent_path();s.manifest=ReadJson(p,1024*1024);auto&j=s.manifest;int schema=j.at("schemaVersion");if(schema!=3&&schema!=4)throw std::runtime_error("Re-export this package with current Dance Studio");s.embedded=true;s.id=j.at("id");s.title=j.at("title");s.submod=j.value("oarSubmod",std::string{});s.token=j.value("token",0u);s.duration=Number(j.at("duration"));s.exportedAt=j.at("exportedAt").get<std::uint64_t>();if(!j.at("exportedAt").is_number_integer()||s.exportedAt>253402300799999ull)throw std::runtime_error("Invalid package timestamp");if((!s.HasDance()&&!s.HasCamera())||s.duration<=0||s.duration>1800||s.id.empty()||s.id.size()>128||s.title.empty()||s.title.size()>1024||(s.HasDance()&&(!s.token||s.token>16777215||s.submod!="DS_"+std::to_string(s.token))))throw std::runtime_error("Invalid package metadata");
- for(auto [key,name]:{std::pair{"dance","mt_idle.hkx"},std::pair{"danceFemale","female/mt_idle.hkx"},std::pair{"cameraSamples","camera.samples.json"},std::pair{"music","music.wav"}}){bool required=std::string_view(key)=="music"||(std::string_view(key).starts_with("dance")?s.HasDance():s.HasCamera());if(!required)continue;if(j.at(key)!=name)throw std::runtime_error("Invalid package track path");auto h=j.at("hashes").at(name).get<std::string>();if(h.size()!=64||!std::all_of(h.begin(),h.end(),[](char c){return(c>='0'&&c<='9')||(c>='a'&&c<='f')||(c>='A'&&c<='F');}))throw std::runtime_error("Invalid SHA256");}return s;}
+inline Song ReadSong(const std::filesystem::path&p){Song s;s.root=p.parent_path();s.manifest=ReadJson(p,1024*1024);auto&j=s.manifest;int schema=j.at("schemaVersion");if(schema!=3&&schema!=4)throw std::runtime_error(L10n::T("r0079"));s.embedded=true;s.id=j.at("id");s.title=j.at("title");s.submod=j.value("oarSubmod",std::string{});s.token=j.value("token",0u);s.duration=Number(j.at("duration"));s.exportedAt=j.at("exportedAt").get<std::uint64_t>();if(!j.at("exportedAt").is_number_integer()||s.exportedAt>253402300799999ull)throw std::runtime_error(L10n::T("r0080"));if((!s.HasDance()&&!s.HasCamera())||s.duration<=0||s.duration>1800||s.id.empty()||s.id.size()>128||s.title.empty()||s.title.size()>1024||(s.HasDance()&&(!s.token||s.token>16777215||s.submod!="DS_"+std::to_string(s.token))))throw std::runtime_error(L10n::T("r0081"));
+ for(auto [key,name]:{std::pair{"dance","mt_idle.hkx"},std::pair{"danceFemale","female/mt_idle.hkx"},std::pair{"danceMale","male/mt_idle.hkx"},std::pair{"cameraSamples","camera.samples.json"},std::pair{"music","music.wav"}}){bool required=std::string_view(key)=="music"||(std::string_view(key).starts_with("dance")?s.HasDance():s.HasCamera());if(std::string_view(key)=="danceMale"&&!j.contains(key))continue;if(!required)continue;if(j.at(key)!=name)throw std::runtime_error(L10n::T("r0082"));auto h=j.at("hashes").at(name).get<std::string>();if(h.size()!=64||!std::all_of(h.begin(),h.end(),[](char c){return(c>='0'&&c<='9')||(c>='a'&&c<='f')||(c>='A'&&c<='F');}))throw std::runtime_error(L10n::T("r0083"));}return s;}
 inline std::string PathText(const std::filesystem::path&p){auto u=p.u8string();return {reinterpret_cast<const char*>(u.data()),u.size()};}
 struct SongSelection {std::vector<Song> songs;std::vector<std::string> ignored,collisions;};
 inline SongSelection SelectSongs(std::vector<Song> input){
@@ -50,10 +104,10 @@ inline SongSelection SelectSongs(std::vector<Song> input){
  SongSelection result;
  std::erase_if(input,[&](const Song&s){if(!s.HasDance()||std::find(blockedTokens.begin(),blockedTokens.end(),s.token)==blockedTokens.end())return false;result.collisions.push_back("token="+std::to_string(s.token)+" id="+s.id+" path="+PathText(s.root));return true;});
  std::sort(input.begin(),input.end(),[](const Song&a,const Song&b){if(a.id!=b.id)return a.id<b.id;if(a.embedded!=b.embedded)return a.embedded>b.embedded;if(a.exportedAt!=b.exportedAt)return a.exportedAt>b.exportedAt;return a.root.u8string()<b.root.u8string();});
- for(auto&s:input){if(!result.songs.empty()&&result.songs.back().id==s.id){if(!result.songs.back().embedded&&result.songs.back().token!=s.token)throw std::runtime_error("Legacy song ID has conflicting tokens: "+s.id);result.ignored.push_back(PathText(s.root));continue;}for(const auto&other:result.songs)if(other.HasDance()&&s.HasDance()&&other.token==s.token)throw std::runtime_error("Different song IDs share a token; re-export as a new project: "+s.id);result.songs.push_back(std::move(s));}
+ for(auto&s:input){if(!result.songs.empty()&&result.songs.back().id==s.id){if(!result.songs.back().embedded&&result.songs.back().token!=s.token)throw std::runtime_error(L10n::T("r0084")+s.id);result.ignored.push_back(PathText(s.root));continue;}for(const auto&other:result.songs)if(other.HasDance()&&s.HasDance()&&other.token==s.token)throw std::runtime_error(L10n::T("r0085")+s.id);result.songs.push_back(std::move(s));}
  return result;
 }
 
-inline void ApplyVolume(Wave& w,double gain){if(!std::isfinite(gain)||gain<0||gain>1)throw std::runtime_error("Invalid audio gain");for(size_t i=0;i+1<w.pcm.size();i+=2){std::int16_t value;std::memcpy(&value,w.pcm.data()+i,2);value=static_cast<std::int16_t>(std::round(value*gain));std::memcpy(w.pcm.data()+i,&value,2);}}
+inline void ApplyVolume(Wave& w,double gain){if(!std::isfinite(gain)||gain<0||gain>1)throw std::runtime_error(L10n::T("r0086"));for(size_t i=0;i+1<w.pcm.size();i+=2){std::int16_t value;std::memcpy(&value,w.pcm.data()+i,2);value=static_cast<std::int16_t>(std::round(value*gain));std::memcpy(w.pcm.data()+i,&value,2);}}
 struct Prepared {Song song;CameraTrack camera;Wave wave;bool hasDance{true};};
 }

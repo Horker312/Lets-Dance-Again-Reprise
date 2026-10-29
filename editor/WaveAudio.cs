@@ -8,24 +8,24 @@ public sealed class WaveAudio {
  public double Duration=>(double)Frames/SampleRate;
  public static WaveAudio Load(string path) {
   using var stream=File.OpenRead(path);using var r=new BinaryReader(stream);
-  if(stream.Length>512L*1024*1024)throw new InvalidDataException("WAV는 512MB 이하만 지원합니다.");
+  if(stream.Length>512L*1024*1024)throw new InvalidDataException(UiText.T("t0338"));
   string Tag()=>System.Text.Encoding.ASCII.GetString(r.ReadBytes(4));
-  if(Tag()!="RIFF")throw new NotSupportedException("RIFF WAV 파일을 선택하세요.");
-  r.ReadUInt32();if(Tag()!="WAVE")throw new InvalidDataException("WAV 파일이 아닙니다.");
+  if(Tag()!="RIFF")throw new NotSupportedException(UiText.T("t0339"));
+  r.ReadUInt32();if(Tag()!="WAVE")throw new InvalidDataException(UiText.T("t0340"));
   ushort format=0,bits=0,channels=0,align=0;int rate=0;byte[] data=[];
   while(stream.Position+8<=stream.Length) {
    string tag=Tag();uint length=r.ReadUInt32();long end=stream.Position+length;
-   if(end>stream.Length)throw new InvalidDataException("WAV 청크 길이가 잘못되었습니다.");
+   if(end>stream.Length)throw new InvalidDataException(UiText.T("t0341"));
    if(tag=="fmt ") {
-    if(length<16)throw new InvalidDataException("WAV 형식 정보가 짧습니다.");
+    if(length<16)throw new InvalidDataException(UiText.T("t0342"));
     format=r.ReadUInt16();channels=r.ReadUInt16();rate=r.ReadInt32();r.ReadUInt32();align=r.ReadUInt16();bits=r.ReadUInt16();
-    if(format==0xfffe) {if(length<40)throw new InvalidDataException("확장 WAV 형식 정보가 짧습니다.");stream.Position+=8;format=r.ReadUInt16();}
+    if(format==0xfffe) {if(length<40)throw new InvalidDataException(UiText.T("t0343"));stream.Position+=8;format=r.ReadUInt16();}
    } else if(tag=="data")data=r.ReadBytes(checked((int)length));
    stream.Position=end+(length&1);
   }
   if(channels is <1 or >2||rate is <8000 or >192000||!((format==1&&bits is 16 or 24 or 32)||(format==3&&bits==32)))
-   throw new NotSupportedException("현재 PCM 16/24/32비트 또는 Float32, 모노/스테레오 WAV를 지원합니다.");
-  if(align!=channels*(bits/8)||data.Length==0||data.Length%align!=0)throw new InvalidDataException("WAV 데이터 정렬이 잘못되었습니다.");
+   throw new NotSupportedException(UiText.T("t0344"));
+  if(align!=channels*(bits/8)||data.Length==0||data.Length%align!=0)throw new InvalidDataException(UiText.T("t0345"));
   var result=new WaveAudio{Path=System.IO.Path.GetFullPath(path),Channels=(short)channels,SampleRate=rate};
   if(format==1&&bits==16)result.Pcm=data;
   else {
@@ -43,9 +43,9 @@ public sealed class WaveAudio {
  }
  public void RebuildPeaks(){Peaks=new float[3000];for(int i=0;i<Peaks.Length;i++){long lo=i*Frames/Peaks.Length,hi=(i+1)*Frames/Peaks.Length;for(long f=lo;f<hi;f++)for(int c=0;c<Channels;c++)Peaks[i]=Math.Max(Peaks[i],Math.Abs(BitConverter.ToInt16(Pcm,(int)(f*BlockAlign+c*2))/32768f));}}
  public void Bake(string path,TrackEdit edit,double begin,double end,double gain=1) {
-  if(!double.IsFinite(gain)||gain<0||gain>1)throw new InvalidDataException("음량은 0~100% 범위여야 합니다.");
+  if(!double.IsFinite(gain)||gain<0||gain>1)throw new InvalidDataException(UiText.T("t0346"));
   edit.Validate(Duration);long count=(long)Math.Round((end-begin)*SampleRate);
-  if(count<=0||count*BlockAlign>512L*1024*1024)throw new InvalidDataException("내보낼 WAV 길이가 지원 범위를 벗어났습니다.");
+  if(count<=0||count*BlockAlign>512L*1024*1024)throw new InvalidDataException(UiText.T("t0347"));
   using var f=File.Create(path);using var w=new BinaryWriter(f);int size=checked((int)(count*BlockAlign));
   void Tag(string s)=>w.Write(System.Text.Encoding.ASCII.GetBytes(s));
   Tag("RIFF");w.Write(size+36);Tag("WAVE");Tag("fmt ");w.Write(16);w.Write((short)1);w.Write(Channels);w.Write(SampleRate);w.Write(SampleRate*BlockAlign);w.Write((short)BlockAlign);w.Write((short)16);Tag("data");w.Write(size);
@@ -59,7 +59,7 @@ public sealed class WaveAudio {
   }
  }
  public static void ApplyGain(Span<byte> pcm,double gain){
-  if(!double.IsFinite(gain)||gain<0||gain>1||pcm.Length%2!=0)throw new InvalidDataException("PCM 음량 설정이 잘못되었습니다.");if(gain==1)return;if(gain==0){pcm.Clear();return;}
+  if(!double.IsFinite(gain)||gain<0||gain>1||pcm.Length%2!=0)throw new InvalidDataException(UiText.T("t0348"));if(gain==1)return;if(gain==0){pcm.Clear();return;}
   for(int i=0;i<pcm.Length;i+=2){short sample=System.Buffers.Binary.BinaryPrimitives.ReadInt16LittleEndian(pcm.Slice(i,2));short adjusted=(short)Math.Clamp((int)Math.Round(sample*gain),short.MinValue,short.MaxValue);System.Buffers.Binary.BinaryPrimitives.WriteInt16LittleEndian(pcm.Slice(i,2),adjusted);}
  }
 }
@@ -85,10 +85,10 @@ public sealed class WaveOutput:IDisposable {
    return start+samples/sampleRate;}
  }
  public double End=>start+(double)frames/sampleRate;
- static void Check(uint code){if(code!=0)throw new IOException("오디오 장치를 사용할 수 없습니다. WinMM 오류 "+code);}
- public void SetVolume(double gain){if(!double.IsFinite(gain)||gain<0||gain>1)throw new InvalidDataException("음량은 0~100% 범위여야 합니다.");if(!Active||gain==gainValue)return;double now=Position,source=sourceStart+now-start;var wave=original!;double end=sourceEnd;Play(wave,source,now,end,gain);}
+ static void Check(uint code){if(code!=0)throw new IOException(UiText.T("t0349")+code);}
+ public void SetVolume(double gain){if(!double.IsFinite(gain)||gain<0||gain>1)throw new InvalidDataException(UiText.T("t0346"));if(!Active||gain==gainValue)return;double now=Position,source=sourceStart+now-start;var wave=original!;double end=sourceEnd;Play(wave,source,now,end,gain);}
  public void Play(WaveAudio wave,double source,double timeline,double until,double gain) {
-  if(!double.IsFinite(gain)||gain<0||gain>1)throw new InvalidDataException("음량을 확인하세요.");Dispose();if(faulted)throw new IOException("오디오 장치가 버퍼를 반환하지 않았습니다. 편집기를 다시 실행하세요.");long first=(long)Math.Round(source*wave.SampleRate),last=(long)Math.Round(until*wave.SampleRate);
+  if(!double.IsFinite(gain)||gain<0||gain>1)throw new InvalidDataException(UiText.T("t0350"));Dispose();if(faulted)throw new IOException(UiText.T("t0351"));long first=(long)Math.Round(source*wave.SampleRate),last=(long)Math.Round(until*wave.SampleRate);
   first=Math.Clamp(first,0,wave.Frames);last=Math.Clamp(last,first,wave.Frames);if(last==first)return;
   start=timeline;frames=last-first;sampleRate=wave.SampleRate;block=wave.BlockAlign;
   var format=new Format{Tag=1,Channels=(ushort)wave.Channels,Rate=(uint)sampleRate,Bytes=(uint)(sampleRate*block),Align=(ushort)block,Bits=16};

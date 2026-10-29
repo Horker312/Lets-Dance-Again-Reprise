@@ -1,4 +1,5 @@
 #pragma once
+#include "Localization.h"
 #include <vector>
 #include <algorithm>
 #include <cmath>
@@ -14,9 +15,9 @@ public:
   saved.resize(remaining);return saved.empty();
  }
  void Begin(const std::vector<Category*>&categories){
-  if(!Restore())throw std::runtime_error("Previous background volume restoration is pending");
+  if(!Restore())throw std::runtime_error(L10n::T("r0140"));
   // Capture all values before muting a parent or child category.
-  for(auto*c:categories){if(!c||std::any_of(saved.begin(),saved.end(),[&](auto&s){return s.category==c;}))continue;float value=c->GetCategoryVolume();if(!std::isfinite(value)||value<0)throw std::runtime_error("Invalid background volume");saved.push_back({c,value});}
+  for(auto*c:categories){if(!c||std::any_of(saved.begin(),saved.end(),[&](auto&s){return s.category==c;}))continue;float value=c->GetCategoryVolume();if(!std::isfinite(value)||value<0)throw std::runtime_error(L10n::T("r0141"));saved.push_back({c,value});}
   try{for(auto&s:saved)s.category->SetCategoryVolume(0);}catch(...){Restore();throw;}
  }
  std::size_t Pending()const noexcept{return saved.size();}
