@@ -4,7 +4,7 @@
 
 | 구분 | 소스 위치 | 공개 기준 버전 | 실행 환경 |
 |---|---|---|---|
-| LDA:R 본 모드 | [runtime/](runtime/) | 0.5.5, Photo Mode 일시정지 수정본 | Skyrim SE **1.5.97**, SKSE64 x64 |
+| LDA:R 본 모드 | [runtime/](runtime/) | 0.5.6, Photo Mode 일시정지 수정본 | Skyrim SE **1.5.97**, SKSE64 x64 |
 | Dance Studio 편집기 | [editor/](editor/) | 0.5.0 | Windows, .NET 10 WPF |
 | CommonLibSSE-NG | [vendor/CommonLibSSE-NG/](vendor/CommonLibSSE-NG/) | 실제 사용한 로컬 SDK 소스 스냅샷 | SE+AE 빌드 |
 
@@ -34,4 +34,6 @@ Dance Studio는 별도 Windows 편집기입니다. 타임라인에서 춤·카�
 
 공개 준비 과정에서 자체 C++·C# 소스가 기존 로컬 버전과 동일한지 해시로 확인했습니다. 대응 정보는 [docs/source-provenance.json](docs/source-provenance.json)에 있습니다. 
 
-최신 소스: LDA:R 0.5.5 / Dance Studio 0.5.0. [카메라 구현·검증 보고서](docs/CAMERA-0.5.5-KO.md). 이번 반영은 소스·문서이며 Releases 바이너리 업로드는 포함하지 않습니다.
+최신 소스: LDA:R 0.5.6 / Dance Studio 0.5.0. [카메라 구현·검증 보고서](docs/CAMERA-0.5.5-KO.md). 이번 반영은 소스·문서이며 Releases 바이너리 업로드는 포함하지 않습니다.
+
+[0.5.6 휠 FOV·자유카메라 수정 및 게임 확인 항목](docs/FIX-FOV-FREECAM-0.5.6-KO.md). 실제 게임 재검증 전 배포 후보입니다.

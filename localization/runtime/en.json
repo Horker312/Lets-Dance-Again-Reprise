@@ -165,5 +165,6 @@
   "r0164": "Camera coordinate space or reference pose is ambiguous.",
   "r0165": "Invalid camera reference scale or effective ratio.",
   "r0166": "Camera cut markers must be boolean.",
-  "r0167": "The effect pivot changed. Legacy custom distance/movement values were reset to 100%; the scale checkbox was retained. Save camera settings to confirm."
+  "r0167": "The effect pivot changed. Legacy custom distance/movement values were reset to 100%; the scale checkbox was retained. Save camera settings to confirm.",
+  "r0168": "Could not enter interactive free camera."
 }

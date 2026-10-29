@@ -55,7 +55,7 @@ struct Config {double volume{.7},stallSeconds{5};unsigned focusPollMs{100};bool 
 HUDGate hud;ProgressWatch progressWatch;ScopedCategoryMute<RE::BGSSoundCategory> backgroundMute;std::vector<RE::BGSSoundCategory*> backgroundCategories;
 bool Focused(){DWORD process{};auto window=GetForegroundWindow();if(!window)return false;GetWindowThreadProcessId(window,&process);return process==GetCurrentProcessId();}
 Hotkeys::Store hotkeys;CameraFramingStore cameraFraming;
-SongPicker picker(&cameraFraming);WheelFov wheelFov;std::uint64_t catalogGeneration{};std::shared_ptr<const PickerChoice> pendingPick;StableStage stableStage;std::atomic_bool recordedCamera{true};double nextCollisionLog{},nextHelperRepark{},nextParkWarning{},maxPlayerStepSquared{};Vec previousPlayerPosition;unsigned protectionResets{};
+SongPicker picker(&cameraFraming);WheelFov wheelFov;WheelFovQueue wheelQueue;std::uint64_t catalogGeneration{};std::shared_ptr<const PickerChoice> pendingPick;StableStage stableStage;std::atomic_bool recordedCamera{true};double nextCollisionLog{},nextHelperRepark{},nextParkWarning{},maxPlayerStepSquared{};Vec previousPlayerPosition;unsigned protectionResets{};
 PriorityRecovery recovery;bool recoveringGraph{};double nextPriorityLog{};bool sessionNative{};std::atomic<double> nextClipTrace{};
 SessionCore core;std::vector<Song> songs;std::string selectedDanceId,selectedCameraId;std::future<std::vector<Song>> catalogFuture;std::future<Prepared> loadFuture;
 std::uint64_t loadEpoch{},catalogEpoch{};bool catalogPending{},available{},wasPaused{},installed{},controlsGated{},cameraOwned{},cameraCalibrated{},announced{},retryIdle{};
@@ -70,7 +70,7 @@ std::array<RE::NiPointer<RE::NiAVObject>,2> hiddenRoots;double nextMeshHide{};
 RE::NiPointer<RE::NiNode> cameraAnchor;RE::BSTSmartPointer<RE::TESCameraState> savedState;RE::ActorHandle savedTarget;
 RE::BSTSmartPointer<RE::BSAnimationGraphManager> graphManager;RE::BSTSmartPointer<RE::BShkbAnimationGraph> playerGraph;
 std::optional<Prepared> prepared;AudioDevice audio;Vec stage;Quat stageRotation,calibration;float savedFov{},ownedFov{};
-using DeferredFov=FovRestoration;std::optional<DeferredFov> deferredFov;double nextFovTrace{};unsigned calibrationTicks{};
+using DeferredFov=FovRestoration;std::optional<DeferredFov> deferredFov;struct DeferredInteractive {RE::ActorHandle target;bool first;};std::optional<DeferredInteractive> deferredInteractive;double nextFovTrace{};unsigned calibrationTicks{};
 double preparedAt{},lastGraphSeen{},resumeGraceUntil{},nextDiagnostic{};RE::NiPoint3 originalPosition;
 struct PlayerHeightScale {
  RE::NiPointer<RE::NiAVObject> root,bone;
@@ -178,15 +178,15 @@ bool Calibrate(){auto* pc=RE::PlayerCamera::GetSingleton();auto* cam=FindCamera(
 
 bool SafeWorld(){auto*p=RE::PlayerCharacter::GetSingleton();auto*ui=RE::UI::GetSingleton();return world&&p&&p->GetParentCell()&&p->Get3D(false)&&ui&&!ui->IsMenuOpen(RE::MainMenu::MENU_NAME)&&!ui->IsMenuOpen(RE::LoadingMenu::MENU_NAME);}
 bool SafePlayer(){auto*p=RE::PlayerCharacter::GetSingleton();return SafeWorld()&&!p->IsDead()&&!p->AsActorState()->IsBleedingOut()&&!p->IsOnMount()&&!p->AsActorState()->IsSwimming()&&!p->AsActorState()->IsSneaking()&&static_cast<int>(p->AsActorState()->GetSitSleepState())==0&&static_cast<int>(p->AsActorState()->GetKnockState())==0&&(!cfg.combatStop||!p->IsInCombat());}
-void Stop(const char* reason=nullptr,bool failed=false){if(core.Stop(failed)&&reason)Notify(reason);running=false;watchClips=false;playback.store(nullptr);view.store(nullptr);}
+void Stop(const char* reason=nullptr,bool failed=false){wheelQueue.Disable();if(core.Stop(failed)&&reason)Notify(reason);running=false;watchClips=false;playback.store(nullptr);view.store(nullptr);}
 void Cleanup(bool touchingWorld=true)noexcept{if(core.State()!=SessionState::Stopping)return;
  // Release our input/render gates BEFORE optional engine restoration.
- inputGate=false;running=false;watchClips=false;playback.store(nullptr);view.store(nullptr);controlsGated=false;graphPlayable=false;pauseReasons=PauseNoSession;loggedPauseReasons=~0u;progressWatch.Reset();
+ wheelQueue.Disable();inputGate=false;running=false;watchClips=false;playback.store(nullptr);view.store(nullptr);controlsGated=false;graphPlayable=false;pauseReasons=PauseNoSession;loggedPauseReasons=~0u;progressWatch.Reset();
  auto attempt=[](auto&&action){if(!BestEffort(action))BestEffort([]{SKSE::log::error("A cleanup step failed; continuing independent recovery steps");});};
  attempt([]{picker.Cancel();});pendingPick.reset();recovery.Reset();recoveringGraph=false;nextPriorityLog=0;
  attempt([]{if(!backgroundMute.Restore())SKSE::log::error("Background volume restoration pending");if(auto*manager=RE::BSAudioManager::GetSingleton())manager->ComposeMessage(RE::SOUND_MSG::VolumeChanged);});
  attempt([]{audio.Close();});if(selector)selector->value=0;
- attempt([&]{auto*pc=RE::PlayerCamera::GetSingleton();if(touchingWorld&&pc&&cameraOwned){if(PhotoMode::Active()){if(recordedCamera.load())deferredFov=DeferredFov{savedFov,ownedFov};if(pc->cameraTarget==cameraActor)pc->cameraTarget=savedTarget;return;}if(!recordedCamera.load()){ExitInteractiveCamera(*pc,savedTarget,savedState&&savedState->id==RE::CameraState::kFirstPerson);return;}auto free=pc->GetRuntimeData().cameraStates[RE::CameraState::kFree];if(pc->currentState==free&&pc->cameraTarget==cameraActor){pc->cameraTarget=savedTarget;if(savedState&&savedState->id==RE::CameraState::kFirstPerson)pc->ForceFirstPerson();else if(savedState&&savedState->id==RE::CameraState::kThirdPerson)pc->ForceThirdPerson();else if(savedState)pc->SetState(savedState.get());else pc->ForceThirdPerson();}else if(pc->cameraTarget==cameraActor)pc->cameraTarget=savedTarget;if(auto value=DeferredFov{savedFov,ownedFov}.Value(pc->GetRuntimeData2().worldFOV))pc->GetRuntimeData2().worldFOV=*value;}});
+ attempt([&]{auto*pc=RE::PlayerCamera::GetSingleton();if(touchingWorld&&pc&&cameraOwned){if(PhotoMode::Active()){if(recordedCamera.load())deferredFov=DeferredFov{savedFov,ownedFov};else deferredInteractive=DeferredInteractive{savedTarget,savedState&&savedState->id==RE::CameraState::kFirstPerson};if(pc->cameraTarget==cameraActor)pc->cameraTarget=savedTarget;return;}if(!recordedCamera.load()){ExitInteractiveCamera(*pc,savedTarget,savedState&&savedState->id==RE::CameraState::kFirstPerson);return;}auto free=pc->GetRuntimeData().cameraStates[RE::CameraState::kFree];if(pc->currentState==free&&pc->cameraTarget==cameraActor){pc->cameraTarget=savedTarget;if(savedState&&savedState->id==RE::CameraState::kFirstPerson)pc->ForceFirstPerson();else if(savedState&&savedState->id==RE::CameraState::kThirdPerson)pc->ForceThirdPerson();else if(savedState)pc->SetState(savedState.get());else pc->ForceThirdPerson();}else if(pc->cameraTarget==cameraActor)pc->cameraTarget=savedTarget;if(auto value=DeferredFov{savedFov,ownedFov}.Value(pc->GetRuntimeData2().worldFOV))pc->GetRuntimeData2().worldFOV=*value;}});
  attempt([&]{if(touchingWorld)if(auto a=cameraActor.get()){a->Disable();a->SetDelete(true);}});
  attempt([&]{if(touchingWorld)if(auto*p=RE::PlayerCharacter::GetSingleton();p&&p->Get3D(false)&&oar)oar->ClearConditionStateData(p);});
  attempt([]{interop::Release();});
@@ -208,7 +208,7 @@ void Publish(double seconds){if(!prepared)return;if(prepared->hasDance&&playerGr
 
 void AttachPrepared(Prepared&& p){if(!SafePlayer())throw std::runtime_error(L10n::T("r0093"));auto*player=RE::PlayerCharacter::GetSingleton();auto*pc=RE::PlayerCamera::GetSingleton();auto*controls=RE::PlayerControls::GetSingleton();if(!pc||!controls||controls->blockPlayerInput)throw std::runtime_error(L10n::T("r0094"));if(!pc->IsInFirstPerson()&&!pc->IsInThirdPerson())throw std::runtime_error(L10n::T("r0095"));if(auto target=pc->cameraTarget.get();target&&target.get()!=player)throw std::runtime_error(L10n::T("r0096"));float speed=0;if(!player->GetGraphVariableFloat("Speed",speed))throw std::runtime_error(L10n::T("r0097"));if(speed>1||player->AsActorState()->IsWeaponDrawn())throw std::runtime_error(L10n::T("r0098"));
  if(!InstallRuntimeHooks()||!oar)throw std::runtime_error(L10n::T("r0099"));
- const bool withCamera=recordedCamera.load();if(!interop::Acquire(withCamera))throw std::runtime_error(L10n::T("r0100"));
+ const bool withCamera=recordedCamera.load();if(!interop::Acquire(true))throw std::runtime_error(L10n::T("r0100"));
  graphPlayable=false;pauseReasons=PauseNoSession|PauseGraph;prepared=std::move(p);audio.Open(std::move(prepared->wave));core.Ready(core.Generation(),ReadyPart::AudioBuffered,true,Now());core.Ready(core.Generation(),ReadyPart::CameraTrack,true,Now());
  if(prepared->hasDance){ if(!player->GetAnimationGraphManager(graphManager)||!graphManager)throw std::runtime_error(L10n::T("r0101"));{RE::BSSpinLockGuard lock(graphManager->GetRuntimeData().updateLock);for(auto&g:graphManager->graphs)if(g&&g->holder==player&&(std::string_view(g->projectName.c_str())=="DefaultFemale"||std::string_view(g->projectName.c_str())=="DefaultMale")){playerGraph=g;break;}if(!playerGraph)for(auto&g:graphManager->graphs)if(g&&g->holder==player){playerGraph=g;break;}}
  if(!playerGraph)throw std::runtime_error(L10n::T("r0102"));SKSE::log::info("Dance body graph: project={} sex={} maleRoute={}",playerGraph->projectName.c_str(),static_cast<int>(player->GetActorBase()->GetSex()),prepared->song.manifest.contains("danceMale"));if(player->GetActorBase()->GetSex()==RE::SEX::kMale&&!prepared->song.manifest.contains("danceMale"))throw std::runtime_error(L10n::T("r0103"));}
@@ -225,13 +225,13 @@ void AttachPrepared(Prepared&& p){if(!SafePlayer())throw std::runtime_error(L10n
 
  ownedFov=static_cast<float>(wheelFov.Value(prepared->camera.At(0).fov));
  pc->ForceThirdPerson();pc->cameraTarget=cameraActor;cameraOwned=true;pc->SetState(pc->GetRuntimeData().cameraStates[RE::CameraState::kFree].get());pc->GetRuntimeData2().worldFOV=ownedFov;
- }else{cameraOwned=false;cameraCalibrated=true;core.Ready(core.Generation(),ReadyPart::CameraActor3D,true,Now());SKSE::log::info("Free view: existing game camera retained");}
+ }else{if(!EnterInteractiveCamera(*pc))throw std::runtime_error(L10n::T("r0168"));cameraOwned=true;cameraCalibrated=true;core.Ready(core.Generation(),ReadyPart::CameraActor3D,true,Now());SKSE::log::info("Interactive free camera entered: freeze=false, no player-relative camera path");}
  inputGate=true;controlsGated=true;controls->data.moveInputVec={0,0};controls->data.lookInputVec={0,0};controls->data.autoMove=false;
  selector->value=prepared->hasDance?static_cast<float>(prepared->song.token):0;if(prepared->hasDance){oar->ClearConditionStateData(player);player->NotifyAnimationGraph("IdleForceDefaultState");}
  generated=0;observedEpoch=0;observation.store(nullptr);observationAt=0;preparedAt=Now();nextDiagnostic=preparedAt+5;lastGraphSeen=Now();calibrationTicks=0;if(withCamera)cameraCalibrated=false;retryIdle=false;nextCollisionLog=nextHelperRepark=nextParkWarning=0;maxPlayerStepSquared=0;protectionResets=0;previousPlayerPosition=stage;Publish(0);Notify(L10n::T("r0106"));
 }
 
-void BeginPrepare(){if(!SafePlayer()){Notify(L10n::T("r0107"));return;}if(RE::UI::GetSingleton()->GameIsPaused()||loadFuture.valid())return;auto selection=ResolveContent(songs,selectedDanceId,selectedCameraId);if(!selection){Notify(L10n::T("r0108"));return;}auto dance=selection->dance,camera=selection->camera;auto epoch=core.Prepare(Now(),45);if(!epoch)return;loadEpoch=*epoch;wheelFov.Reset();recordedCamera=camera.has_value();sessionNative=hotkeys.NativePlayback();nextClipTrace=0;Song master=dance?*dance:*camera;SKSE::log::info("Selection: dance={} camera={} audioMaster={} duration={}",selectedDanceId,selectedCameraId,master.id,master.duration);loadFuture=std::async(std::launch::async,[master=std::move(master),dance=std::move(dance),camera=std::move(camera),volume=cfg.volume]()mutable{return Load(std::move(master),std::move(dance),std::move(camera),volume);});Notify(L10n::T("r0109"));}
+void BeginPrepare(){if(!SafePlayer()){Notify(L10n::T("r0107"));return;}if(RE::UI::GetSingleton()->GameIsPaused()||loadFuture.valid())return;auto selection=ResolveContent(songs,selectedDanceId,selectedCameraId);if(!selection){Notify(L10n::T("r0108"));return;}auto dance=selection->dance,camera=selection->camera;auto epoch=core.Prepare(Now(),45);if(!epoch)return;loadEpoch=*epoch;wheelQueue.Disable();wheelFov.Reset();recordedCamera=camera.has_value();sessionNative=hotkeys.NativePlayback();nextClipTrace=0;Song master=dance?*dance:*camera;SKSE::log::info("Selection: dance={} camera={} audioMaster={} duration={}",selectedDanceId,selectedCameraId,master.id,master.duration);loadFuture=std::async(std::launch::async,[master=std::move(master),dance=std::move(dance),camera=std::move(camera),volume=cfg.volume]()mutable{return Load(std::move(master),std::move(dance),std::move(camera),volume);});Notify(L10n::T("r0109"));}
 void PublishSongList(std::string error={}){auto data=std::make_shared<PickerList>();data->generation=catalogGeneration;data->loading=catalogPending;data->error=std::move(error);FillPickerTracks(*data,songs);picker.Publish(std::move(data));}
 
 void Select(){if(core.State()!=SessionState::Idle){Notify(L10n::T("r0110"));return;}if(catalogPending||catalogFuture.valid())return;
@@ -255,6 +255,7 @@ void ProcessCommands(){unsigned bits=commands.exchange(0);if(bits&32)hud.Toggle(
 
 }
 
+void ProcessWheelQueue();
 void Tick(){
  if(catalogPending&&!catalogFuture.valid()){catalogPending=false;PublishSongList(L10n::T("r0118"));}
  if(catalogPending&&catalogFuture.wait_for(std::chrono::seconds(0))==std::future_status::ready){catalogPending=false;try{auto result=catalogFuture.get();if(catalogEpoch!=catalogGeneration){songs.clear();Select();return;}songs=std::move(result);PublishSongList();if(songs.empty())Notify(L10n::T("r0119"));else Notify(L10n::T("r0120")+std::to_string(songs.size())+L10n::T("r0149"));}catch(const std::exception&e){songs.clear();if(catalogEpoch!=catalogGeneration){Select();return;}PublishSongList(std::string(L10n::T("r0121"))+e.what());Notify(std::string(L10n::T("r0150"))+e.what());}}
@@ -296,33 +297,45 @@ void Tick(){
  if(core.State()==SessionState::Armed&&!announced){announced=true;Notify(L10n::T("r0125"));}if(core.State()==SessionState::Armed&&core.PendingStart()){commands.fetch_or(16);ProcessCommands();}
  graphPlayable=graphReady;
  if(core.State()==SessionState::Playing){ApplyPlaybackPause(true);paused=(pauseReasons.load()&~PauseGraph)!=0;if(paused||!graphReady)progressWatch.Reset();if(!paused&&graphReady){auto frames=audio.Frames();if(progressWatch.Stalled(Now(),frames,true,cfg.stallSeconds))throw std::runtime_error(L10n::T("r0126"));core.AudioProgress(core.Generation(),frames,audio.Rate());if(core.State()==SessionState::Stopping){Cleanup();return;}if(core.Seconds()>=prepared->song.duration-1./audio.Rate()||audio.Done()){Stop(L10n::T("r0127"));Cleanup();return;}}}
- if(withCamera&&!photoActive.load()&&Now()>=nextFovTrace){nextFovTrace=Now()+5.;if(auto*camera=FindCamera(pc->cameraRoot.get())){auto f=camera->GetRuntimeData2().viewFrustum;SKSE::log::info("FOV projection: world={} left={} right={} top={} bottom={} near={} ortho={}",pc->GetRuntimeData2().worldFOV,f.fLeft,f.fRight,f.fTop,f.fBottom,f.fNear,f.bOrtho);}}
- Publish(core.State()==SessionState::Playing?core.Seconds():0);
+ if(withCamera&&!photoActive.load()&&Now()>=nextFovTrace){nextFovTrace=Now()+5.;if(auto*camera=FindCamera(pc->cameraRoot.get())){auto f=camera->GetRuntimeData2().viewFrustum;SKSE::log::info("FOV projection diagnostic: desired={} owned={} world={} left={} right={} top={} bottom={} near={} ortho={}",wheelFov.Value(prepared->camera.At(core.Seconds()).fov),ownedFov,pc->GetRuntimeData2().worldFOV,f.fLeft,f.fRight,f.fTop,f.fBottom,f.fNear,f.bOrtho);}}
+ ProcessWheelQueue();Publish(core.State()==SessionState::Playing?core.Seconds():0);
 }
 using UpdateFn=void(*)();UpdateFn originalUpdate{};bool pumpInstalled{};
-void SyncPhotoState(){if(deferredFov&&!PhotoMode::Active()&&!photoRequestUntil){auto*pc=RE::PlayerCamera::GetSingleton();if(world.load()&&pc)if(auto value=deferredFov->Value(pc->GetRuntimeData2().worldFOV))pc->GetRuntimeData2().worldFOV=*value;deferredFov.reset();}engineFrozen=PhotoMode::Frozen();bool active=PhotoMode::Active();if(active)photoRequestUntil=0;else if(photoRequestUntil&&Now()>=photoRequestUntil){photoRequestUntil=0;BestEffort([]{Notify(L10n::T("r0128"));});}bool previousPhoto=photoActive.load();photoActive=active||photoRequestUntil>Now();if(previousPhoto&&!photoActive.load()&&cameraOwned&&recordedCamera.load())cameraReturnPending=true;if(photoActive.load()){if(auto previous=view.exchange(nullptr)){auto*pc=RE::PlayerCamera::GetSingleton();if(pc&&pc->currentState.get()==previous->state){auto*free=static_cast<RE::FreeCameraState*>(previous->state);auto*player=RE::PlayerCharacter::GetSingleton();auto position=player?Vector(player->GetPosition()):previous->origin;auto basis=player?Yaw(-player->GetAngleZ()):previous->basis;free->translation=Point(FollowCameraPosition(previous->position,previous->origin,previous->basis,position,basis));}}}ApplyPlaybackPause(false);}
-void MainUpdate(){BestEffort([]{SyncPhotoState();});originalUpdate();BestEffort([]{SyncPhotoState();});DWORD current=GetCurrentThreadId(),unset=0;mainThread.compare_exchange_strong(unset,current);if(current!=mainThread.load())return;if(!world&&core.State()==SessionState::Idle&&!loadFuture.valid())return;try{Tick();inputState=core.State();}catch(const std::exception&e){Stop(nullptr,true);Cleanup();inputState=core.State();BestEffort([&]{Notify(std::string(L10n::T("r0151"))+e.what());});}catch(...){Stop(nullptr,true);Cleanup();inputState=core.State();}}
+void SyncPhotoState(){if(deferredInteractive&&!PhotoMode::Active()&&!photoRequestUntil){if(world.load())if(auto*pc=RE::PlayerCamera::GetSingleton())ExitInteractiveCamera(*pc,deferredInteractive->target,deferredInteractive->first);deferredInteractive.reset();}if(deferredFov&&!PhotoMode::Active()&&!photoRequestUntil){auto*pc=RE::PlayerCamera::GetSingleton();if(world.load()&&pc)if(auto value=deferredFov->Value(pc->GetRuntimeData2().worldFOV))pc->GetRuntimeData2().worldFOV=*value;deferredFov.reset();}engineFrozen=PhotoMode::Frozen();bool active=PhotoMode::Active();if(active)photoRequestUntil=0;else if(photoRequestUntil&&Now()>=photoRequestUntil){photoRequestUntil=0;BestEffort([]{Notify(L10n::T("r0128"));});}bool previousPhoto=photoActive.load();photoActive=active||photoRequestUntil>Now();if(previousPhoto&&!photoActive.load()&&cameraOwned&&recordedCamera.load())cameraReturnPending=true;if(photoActive.load()){if(auto previous=view.exchange(nullptr)){auto*pc=RE::PlayerCamera::GetSingleton();if(pc&&pc->currentState.get()==previous->state){auto*free=static_cast<RE::FreeCameraState*>(previous->state);auto*player=RE::PlayerCharacter::GetSingleton();auto position=player?Vector(player->GetPosition()):previous->origin;auto basis=player?Yaw(-player->GetAngleZ()):previous->basis;free->translation=Point(FollowCameraPosition(previous->position,previous->origin,previous->basis,position,basis));}}}ApplyPlaybackPause(false);}
+bool WheelAllowedNow(){
+ auto*pc=RE::PlayerCamera::GetSingleton();auto*ui=RE::UI::GetSingleton();auto*cm=RE::ControlMap::GetSingleton();
+ bool owned=pc&&cameraOwned&&pc->cameraTarget==cameraActor&&pc->currentState==pc->GetRuntimeData().cameraStates[RE::CameraState::kFree];
+ bool blocked=!world.load()||!running.load()||!prepared||!ui||!cm||!Focused()||settings.Open()||menuSuspended.load()||(ui&&(ui->GameIsPaused()||ui->IsMenuOpen(RE::Console::MENU_NAME)))||(cm&&cm->GetRuntimeData().textEntryCount>0);
+ return MayAdjustWheelFov(core.State(),recordedCamera.load(),owned,photoActive.load()||PhotoMode::Active(),blocked);
+}
+void UpdateWheelAdmission(){wheelQueue.Configure(core.Generation(),WheelAllowedNow());}
+void ProcessWheelQueue(){
+ UpdateWheelAdmission();auto batch=wheelQueue.Drain(core.Generation());if(!batch.count)return;
+ const auto source=prepared->camera.At(core.Seconds()).fov;for(std::size_t i=0;i<batch.count;++i)wheelFov.Step(source,batch.steps[i]);
+ SKSE::log::info("Wheel FOV applied: events={} updateThread={} source={} desired={}",batch.count,GetCurrentThreadId(),source,wheelFov.Value(source));
+}
+void MainUpdate(){
+ BestEffort([]{SyncPhotoState();});if(GetCurrentThreadId()==mainThread.load())BestEffort([]{UpdateWheelAdmission();});
+ originalUpdate();BestEffort([]{SyncPhotoState();});DWORD current=GetCurrentThreadId(),unset=0;mainThread.compare_exchange_strong(unset,current);if(current!=mainThread.load())return;
+ if(!world&&core.State()==SessionState::Idle&&!loadFuture.valid()){wheelQueue.Disable();return;}
+ try{Tick();inputState=core.State();UpdateWheelAdmission();}catch(const std::exception&e){Stop(nullptr,true);Cleanup();inputState=core.State();BestEffort([&]{Notify(std::string(L10n::T("r0151"))+e.what());});}catch(...){Stop(nullptr,true);Cleanup();inputState=core.State();}
+}
 bool InstallPump(){if(pumpInstalled)return true;auto v=REL::Module::get().version();auto h=HooksFor(v[1],v[2]);REL::Relocation<std::uintptr_t> update{REL::ID(h.updateId)};auto site=update.address()+h.updateOffset;if(*reinterpret_cast<unsigned char*>(site)!=0xE8)return false;std::int32_t displacement;std::memcpy(&displacement,reinterpret_cast<void*>(site+1),4);auto old=site+5+displacement;if(!Executable(old))return false;originalUpdate=reinterpret_cast<UpdateFn>(old);SKSE::AllocTrampoline(64);SKSE::GetTrampoline().write_call<5>(site,MainUpdate);pumpInstalled=true;return true;}
 using DispatchFn=void(*)(RE::BSTEventSource<RE::InputEvent*>*,RE::InputEvent**);
 DispatchFn originalDispatch{};
-bool HandleWheelFov(RE::ButtonEvent&button,SessionState state){
+bool HandleWheelFov(RE::ButtonEvent&button,std::uint64_t token){
  if(button.GetDevice()!=RE::INPUT_DEVICE::kMouse)return false;
  const auto code=button.GetIDCode();if(code!=RE::BSWin32MouseDevice::Key::kWheelUp&&code!=RE::BSWin32MouseDevice::Key::kWheelDown)return false;
- if(!world.load()||!running.load()||GetCurrentThreadId()!=mainThread.load())return false;
- auto*pc=RE::PlayerCamera::GetSingleton();auto*ui=RE::UI::GetSingleton();auto*cm=RE::ControlMap::GetSingleton();
- bool owned=pc&&cameraOwned&&pc->cameraTarget==cameraActor&&pc->currentState==pc->GetRuntimeData().cameraStates[RE::CameraState::kFree];
- bool blocked=!ui||!cm||!Focused()||settings.Open()||menuSuspended.load()||(ui&&(ui->GameIsPaused()||ui->IsMenuOpen(RE::Console::MENU_NAME)))||(cm&&cm->GetRuntimeData().textEntryCount>0);
- if(!MayAdjustWheelFov(state,recordedCamera.load(),owned,photoActive.load()||PhotoMode::Active(),blocked)||!prepared)return false;
- if(button.IsPressed()){auto source=prepared->camera.At(core.Seconds()).fov;wheelFov.Step(source,code==RE::BSWin32MouseDevice::Key::kWheelUp?-1:1);ownedFov=static_cast<float>(wheelFov.Value(source));pc->GetRuntimeData2().worldFOV=ownedFov;}
- return true;
+ return wheelQueue.Input(code==RE::BSWin32MouseDevice::Key::kWheelUp?-1:1,button.IsPressed(),token);
 }
 void DispatchInput(RE::BSTEventSource<RE::InputEvent*>*source,RE::InputEvent**events){
- static SpaceGate space;auto state=inputState.load();bool active=state!=SessionState::Idle;
+ static ConcurrentSpaceGate space;auto state=inputState.load();bool active=state!=SessionState::Idle;
  if(!events||(!active&&!space.Owned())){originalDispatch(source,events);return;}
+ const auto wheelToken=wheelQueue.Token();
  std::vector<std::pair<RE::InputEvent*,RE::InputEvent*>> links;RE::InputEvent*head=nullptr,*tail=nullptr;
  for(auto*e=*events;e;){auto*next=e->next;links.emplace_back(e,next);bool consume=false;
   if(auto*b=e->AsButtonEvent();b&&b->GetDevice()==RE::INPUT_DEVICE::kKeyboard&&b->GetIDCode()==57){auto decision=space.Event(state,b->IsDown(),b->IsUp());consume=decision.consume;if(decision.toggle)ToggleUserPauseNow();}
-  if(!consume)if(auto*b=e->AsButtonEvent())consume=HandleWheelFov(*b,state);
+  if(!consume)if(auto*b=e->AsButtonEvent())consume=HandleWheelFov(*b,wheelToken);
   if(!consume){if(tail)tail->next=e;else head=e;tail=e;}e=next;
  }
  if(tail)tail->next=nullptr;
@@ -342,7 +355,7 @@ struct Menus:RE::BSTEventSink<RE::MenuOpenCloseEvent> {
  void Reset(){std::scoped_lock lock(mutex);pausing.clear();menuSuspended=false;}
 }menus;
 
-void WorldReset(bool valid){deferredFov.reset();photoRequestUntil=0;userPaused=false;photoActive=false;hud.Restore();backgroundMute.Restore();picker.Cancel();pendingPick.reset();++catalogGeneration;commands=0;Stop();Cleanup(valid);if(!valid){std::scoped_lock lock(clipsLock);clips.clear();clipCount=0;}if(selector)selector->value=0;world=false;inputState=SessionState::Idle;menus.Reset();}
+void WorldReset(bool valid){wheelQueue.Disable();deferredInteractive.reset();deferredFov.reset();photoRequestUntil=0;userPaused=false;photoActive=false;hud.Restore();backgroundMute.Restore();picker.Cancel();pendingPick.reset();++catalogGeneration;commands=0;Stop();Cleanup(valid);deferredInteractive.reset();if(!valid){std::scoped_lock lock(clipsLock);clips.clear();clipCount=0;}if(selector)selector->value=0;world=false;inputState=SessionState::Idle;menus.Reset();}
 void ResolveBackgroundCategories(){
  backgroundCategories.clear();auto path=std::filesystem::path(L"Data\\SKSE\\Plugins\\DanceStudio\\BackgroundAudio.json");
  auto fallback=[](){backgroundCategories.clear();auto*defaults=RE::BGSDefaultObjectManager::GetSingleton();if(defaults)if(auto*music=defaults->GetObject<RE::BGSSoundCategory>(RE::BGSDefaultObjectManager::DefaultObject::kMusicSoundCategory))backgroundCategories.push_back(music);};
