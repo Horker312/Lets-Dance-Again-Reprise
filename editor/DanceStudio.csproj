@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+ <PropertyGroup>
+  <OutputType>WinExe</OutputType><TargetFramework>net10.0-windows</TargetFramework>
+  <UseWPF>true</UseWPF><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
+  <AssemblyName>DanceStudio</AssemblyName><Version>0.4.10</Version>
+  <NuGetAudit>false</NuGetAudit><RestoreIgnoreFailedSources>true</RestoreIgnoreFailedSources>
+ </PropertyGroup>
+ <ItemGroup>
+  <EmbeddedResource Include="Resources/skeleton_female.hkx" LogicalName="DanceStudio.DefaultSkeleton.hkx" />
+  <Reference Include="HKX2E"><HintPath>lib/HKX2E.dll</HintPath></Reference>
+  <Reference Include="MemoryPack.Core"><HintPath>lib/MemoryPack.Core.dll</HintPath></Reference>
+  <Reference Include="Riok.Mapperly.Abstractions"><HintPath>lib/Riok.Mapperly.Abstractions.dll</HintPath></Reference>
+  <Reference Include="Matcher"><HintPath>lib/Matcher.dll</HintPath><Private>true</Private></Reference>
+ </ItemGroup>
+</Project>

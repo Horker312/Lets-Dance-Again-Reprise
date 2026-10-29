@@ -1,0 +1,9 @@
+{
+  "skeleton_female.hkx": "438730b8c891c9aa5db0eb9b8e54e1ec550ddf4f36fcefdd895ca4feb746f0d9",
+  "editorLibraries": {
+    "HKX2E.dll": "df8f3398054be7df16116021bb36d41cb40578f7efa967d8417bf212208c84b0",
+    "Matcher.dll": "91e9394736c8bc448626bd69d41c6031552b0de3c944c8d56136c491cc6ed391",
+    "MemoryPack.Core.dll": "6dc7785eea92dc72b9ea4d9d9b08c585ce87c11ec6b8388d00a179af694cf6be",
+    "Riok.Mapperly.Abstractions.dll": "f4cc64097d88dc835c322b6394a44edc6a94ba76b6b594366fc88866a6e0d4ed"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "categories": [
+    {
+      "plugin": "Skyrim.esm",
+      "formId": "071E64",
+      "label": "Music"
+    },
+    {
+      "plugin": "Skyrim.esm",
+      "formId": "07F80B",
+      "label": "Ambience"
+    },
+    {
+      "plugin": "Skyrim.esm",
+      "formId": "071E63",
+      "label": "Ambience reverb"
+    }
+  ]
+}
