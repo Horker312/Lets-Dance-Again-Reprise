@@ -1,3 +1,4 @@
+#include "FacialTimeline.h"
 #pragma once
 #include "Localization.h"
 #include <cstring>
@@ -109,5 +110,5 @@ inline SongSelection SelectSongs(std::vector<Song> input){
 }
 
 inline void ApplyVolume(Wave& w,double gain){if(!std::isfinite(gain)||gain<0||gain>1)throw std::runtime_error(L10n::T("r0086"));for(size_t i=0;i+1<w.pcm.size();i+=2){std::int16_t value;std::memcpy(&value,w.pcm.data()+i,2);value=static_cast<std::int16_t>(std::round(value*gain));std::memcpy(w.pcm.data()+i,&value,2);}}
-struct Prepared {Song song;CameraTrack camera;Wave wave;bool hasDance{true};};
+struct Prepared {Facial::Timeline facial;Song song;CameraTrack camera;Wave wave;bool hasDance{true};};
 }

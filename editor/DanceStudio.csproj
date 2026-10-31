@@ -6,7 +6,7 @@
   <AssemblyName>DanceStudio</AssemblyName><Version>$(DanceStudioVersion)</Version>
   <NuGetAudit>false</NuGetAudit><RestoreIgnoreFailedSources>true</RestoreIgnoreFailedSources>
  </PropertyGroup>
- <ItemGroup>
+ <ItemGroup><ProjectReference Include="../face_assets/FaceAssets.csproj"/><ProjectReference Include="../facial_studio/Shared/FacialPresets.csproj" />
   <EmbeddedResource Include="Resources/Locales/ko.json" LogicalName="DanceStudio.Locale.ko.json" />
   <EmbeddedResource Include="Resources/Locales/en.json" LogicalName="DanceStudio.Locale.en.json" />
   <EmbeddedResource Include="Resources/skeleton_female.hkx" LogicalName="DanceStudio.DefaultSkeleton.hkx" />

@@ -166,5 +166,19 @@
   "r0165": "Invalid camera reference scale or effective ratio.",
   "r0166": "Camera cut markers must be boolean.",
   "r0167": "The effect pivot changed. Legacy custom distance/movement values were reset to 100%; the scale checkbox was retained. Save camera settings to confirm.",
-  "r0168": "Could not enter interactive free camera."
+  "r0168": "Could not enter interactive free camera.",
+  "r0169": "Facial control prototype (player only)",
+  "r0170": "Enable facial tests (this run only)",
+  "r0171": "MFEE-only test. Read registry saves a catalog in the SKSE log folder. Verify actual face support separately.",
+  "r0172": "Read current values / refresh MFEE list",
+  "r0173": "Test strength",
+  "r0174": "Apply MFG expression",
+  "r0175": "Apply MFG modifier",
+  "r0176": "Apply MFG phoneme",
+  "r0177": "Apply selected MFEE morph",
+  "r0178": "End / restore MFEE only",
+  "r0179": "End / restore all facial control",
+  "r0180": "End / restore expression only",
+  "r0181": "End / restore modifiers only",
+  "r0182": "End / restore phonemes only"
 }

@@ -1,0 +1,1 @@
+공개 폴더는 editor/, runtime/, face_assets/, facial_studio/입니다. .NET 10 SDK와 MSVC가 필요합니다. editor 프로젝트의 외부 lib 및 내장 스켈레톤은 기존 허가된 설치본에서 준비하세요. 네이티브 빌드는 tools/ 및 build_native.py의 개발 PC 경로를 환경에 맞게 수정해야 합니다. dependencies/와 licenses/에 외부 소스 및 라이선스를 포함합니다. 실제 배포 DLL의 로컬 빌드는 성공했지만 공개 경로에서의 독립 재빌드는 미검증입니다.

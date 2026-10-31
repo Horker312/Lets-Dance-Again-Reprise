@@ -9,6 +9,7 @@ namespace DanceStudio;
 public static class Program {
  [STAThread] public static void Main(string[] args) {
   try {
+   if(args.Length>0&&args[0]=="--lifetime-test"){LifetimeTests.Run(args.Skip(1).ToArray());return;}
    if(args.Length>0&&args[0]=="--localization-test"){LocalizationTests.Run(args[1]);return;}
 
    if(args.Length>0&&args[0]=="--inspect") {

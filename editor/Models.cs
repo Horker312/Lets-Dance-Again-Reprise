@@ -28,6 +28,7 @@ public sealed class TrackEdit {
  }
 }
 public sealed class SongProject {
+ public List<FacialPresets.FacialSegment> FacialTracks {get;set;}=[];
  public int SchemaVersion {get;set;}=5;
  public string Id {get;set;}=Guid.NewGuid().ToString("N");
  public Dictionary<string,string> PackageIds {get;set;}=new(){["both"]=Guid.NewGuid().ToString("N"),["dance"]=Guid.NewGuid().ToString("N"),["camera"]=Guid.NewGuid().ToString("N")};
@@ -61,8 +62,9 @@ public sealed class SongProject {
  public bool CameraBoneManual {get;set;}
  public bool CameraForwardManual {get;set;}
  public MotionCheckOptions Verification {get;set;}=new();
- public static JsonSerializerOptions Json {get;}=new(){WriteIndented=true};
+ public static JsonSerializerOptions Json {get;}=new(){WriteIndented=true,PropertyNameCaseInsensitive=true};
  public void Save(string path) {
+  FacialPresets.FacialTimeline.Validate(FacialTracks);
   ProjectRules.Validate(this);
   string destination=System.IO.Path.GetFullPath(path);
   if(new[]{Dance.Path,Camera.Path,Audio.Path,Skeleton}.Where(x=>!string.IsNullOrEmpty(x)&&!Rig.IsBuiltin(x)).Any(x=>string.Equals(System.IO.Path.GetFullPath(x),destination,StringComparison.OrdinalIgnoreCase)))throw new IOException(UiText.T("t0248"));
@@ -71,15 +73,16 @@ public sealed class SongProject {
   foreach(var t in new[]{copy.Dance,copy.Camera,copy.Audio})
    if(t.Path.Length>0)t.Path=System.IO.Path.GetRelativePath(folder,t.Path);
   copy.Skeleton=Rig.IsBuiltin(copy.Skeleton)?Rig.BuiltinId:copy.Skeleton;if(!Rig.IsBuiltin(copy.Skeleton))copy.Skeleton=System.IO.Path.GetRelativePath(folder,copy.Skeleton);
-  AtomicWrite(path,JsonSerializer.Serialize(copy,Json));
+  var json=JsonSerializer.Serialize(copy,Json);if(System.Text.Encoding.UTF8.GetByteCount(json)>32*1024*1024)throw new InvalidDataException("프로젝트가 너무 큽니다.");AtomicWrite(path,json);
  }
  public static SongProject Load(string path) {
-  if(new FileInfo(path).Length>1024*1024)throw new InvalidDataException(UiText.T("t0249"));
-  var p=JsonSerializer.Deserialize<SongProject>(File.ReadAllText(path),Json)??throw new InvalidDataException(UiText.T("t0250"));
+  if(new FileInfo(path).Length>32*1024*1024)throw new InvalidDataException(UiText.T("t0249"));
+  var text=File.ReadAllText(path);var p=JsonSerializer.Deserialize<SongProject>(text,Json)??throw new InvalidDataException(UiText.T("t0250"));
   if(p.SchemaVersion!=5)throw new InvalidDataException(UiText.T("t0251"));
-  using var raw=JsonDocument.Parse(File.ReadAllText(path));if(!raw.RootElement.TryGetProperty("CameraBoneManual",out _))p.CameraBoneManual=p.CameraBone>=0;if(!raw.RootElement.TryGetProperty("CameraForwardManual",out _))p.CameraForwardManual=raw.RootElement.TryGetProperty("CameraForward",out _);
+  using var raw=JsonDocument.Parse(text);FacialPresets.JsonShape.ProjectFacials(raw.RootElement);bool Has(string n)=>raw.RootElement.EnumerateObject().Any(x=>x.Name.Equals(n,StringComparison.OrdinalIgnoreCase));if(!Has("CameraBoneManual"))p.CameraBoneManual=p.CameraBone>=0;if(!Has("CameraForwardManual"))p.CameraForwardManual=Has("CameraForward");
   if(p.SchemaVersion<4)p.FovMode="Manual";
   if(p.FovMode=="Auto")throw new InvalidDataException(UiText.T("t0252"));
+  FacialPresets.FacialTimeline.Validate(p.FacialTracks);
   ProjectRules.Validate(p);
   string folder=System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(path))!;
   foreach(var t in new[]{p.Dance,p.Camera,p.Audio})

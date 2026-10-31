@@ -12,6 +12,7 @@ public static class UiText {
  public static IReadOnlyDictionary<string,string> Korean=>ko;
  public static IReadOnlyDictionary<string,string> English=>en;
  public static string T(string key){var map=language=="en"?en:ko;return map.TryGetValue(key,out var value)?value:ko.TryGetValue(key,out value)?value:key;}
+ public static string Error(string message){if(language!="en")return message;foreach(var item in ko)if(item.Value==message&&en.TryGetValue(item.Key,out var translated))return translated;return message;}
  public static string F(string key,params object?[] args)=>string.Format(CultureInfo.InvariantCulture,T(key),args);
  public static void SetLanguage(string value){if(value!="ko"&&value!="en")throw new ArgumentException("Unsupported language");Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);var temp=SettingsPath+"."+Guid.NewGuid().ToString("N")+".tmp";try{File.WriteAllText(temp,JsonSerializer.Serialize(new{language=value}));File.Move(temp,SettingsPath,true);language=value;}finally{if(File.Exists(temp))File.Delete(temp);}}
 }

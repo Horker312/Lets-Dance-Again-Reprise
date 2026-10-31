@@ -34,6 +34,8 @@
 #include "Version.h"
 #include "Localization.h"
 #include "RuntimeSupport.h"
+#include "FacialTest.h"
+#include "FacialPlayback.h"
 #if !defined(ENABLE_SKYRIM_SE) || !defined(ENABLE_SKYRIM_AE) || defined(ENABLE_SKYRIM_VR)
 #error LDA:R requires the matching SE+AE SDK (VR is not supported)
 #endif
@@ -47,6 +49,7 @@ static_assert(offsetof(RE::bhkCharacterController,flags)==0x218&&offsetof(RE::bh
 
 namespace DS {
 using namespace DanceStudio;
+Facial::Test facialTest;Facial::Playback facialPlayback;
 constexpr char Forms[]="DanceStudioData.esl";
 constexpr wchar_t Ini[]=L"Data\\SKSE\\Plugins\\DanceStudio.ini";
 constexpr auto SongFolderRoot=L"Data\\meshes\\actors\\character\\animations\\OpenAnimationReplacer\\Dance Studio";
@@ -113,7 +116,8 @@ std::string Hash(const std::vector<char>& bytes){BCRYPT_ALG_HANDLE alg{};BCRYPT_
 Prepared Load(Song master,std::optional<Song> dance,std::optional<Song> camera,double volume){Prepared p;p.song=std::move(master);p.hasDance=dance.has_value();
  auto track=[](const Song&s,const char*key,std::uintmax_t max){auto name=s.manifest.at(key).get<std::string>();auto bytes=ReadBytes(RelativeFile(s.root,name),max);if(Hash(bytes)!=s.manifest.at("hashes").at(name).get<std::string>())throw std::runtime_error(L10n::T("r0088")+name);return bytes;};
  if(dance){for(const char*key:{"dance","danceFemale","danceMale"})if(dance->manifest.contains(key))track(*dance,key,512ull*1024*1024);p.song.token=dance->token;p.song.submod=dance->submod;}else{p.song.token=0;p.song.submod.clear();}
- if(camera){auto bytes=track(*camera,"cameraSamples",384ull*1024*1024);p.camera=CameraTrack::Read(Json::parse(bytes),camera->duration);}auto music=track(p.song,"music",384ull*1024*1024);p.wave=ReadWave(music,p.song.duration);ApplyVolume(p.wave,volume);return p;}
+ if(camera){auto bytes=track(*camera,"cameraSamples",384ull*1024*1024);p.camera=CameraTrack::Read(Json::parse(bytes),camera->duration);}auto music=track(p.song,"music",384ull*1024*1024);p.wave=ReadWave(music,p.song.duration);ApplyVolume(p.wave,volume);
+ if(p.song.manifest.contains("facialTimeline"))try{auto name=p.song.manifest.at("facialTimeline").get<std::string>();if(name!="facial.timeline.json")throw std::runtime_error("unsupported facial path");auto bytes=track(p.song,"facialTimeline",2*1024*1024);p.facial=Facial::Timeline::Read(Facial::ParseFacial(bytes),p.song.duration);if(p.facial.legacySkipped)SKSE::log::warn("{} unsupported MFG modifier entries skipped (valid modifier range 0..13). Other morphs retained",p.facial.legacySkipped);SKSE::log::info("Facial timeline loaded: {} segments; profiles are resource targets, visual support unverified",p.facial.segments.size());}catch(const std::exception&e){p.facial={};SKSE::log::warn("Facial file rejected; music/dance/camera retained: {}",e.what());}return p;}
 
 
 std::vector<Song> Catalog(){std::vector<Song> found;for(auto root:{SongsRoot,SongFolderRoot}){if(!std::filesystem::exists(root))continue;for(auto&e:std::filesystem::directory_iterator(root)){if(!e.is_directory())continue;auto path=e.path()/"song.json";if(!std::filesystem::exists(path))continue;if(found.size()>=512)throw std::runtime_error(L10n::T("r0089"));try{auto song=ReadSong(path);if(root==SongFolderRoot&&!song.embedded)throw std::runtime_error(L10n::T("r0090"));found.push_back(std::move(song));}catch(const std::exception&x){SKSE::log::warn("Rejected song {}: {}",PathText(e.path()),x.what());}}}
@@ -178,8 +182,9 @@ bool Calibrate(){auto* pc=RE::PlayerCamera::GetSingleton();auto* cam=FindCamera(
 
 bool SafeWorld(){auto*p=RE::PlayerCharacter::GetSingleton();auto*ui=RE::UI::GetSingleton();return world&&p&&p->GetParentCell()&&p->Get3D(false)&&ui&&!ui->IsMenuOpen(RE::MainMenu::MENU_NAME)&&!ui->IsMenuOpen(RE::LoadingMenu::MENU_NAME);}
 bool SafePlayer(){auto*p=RE::PlayerCharacter::GetSingleton();return SafeWorld()&&!p->IsDead()&&!p->AsActorState()->IsBleedingOut()&&!p->IsOnMount()&&!p->AsActorState()->IsSwimming()&&!p->AsActorState()->IsSneaking()&&static_cast<int>(p->AsActorState()->GetSitSleepState())==0&&static_cast<int>(p->AsActorState()->GetKnockState())==0&&(!cfg.combatStop||!p->IsInCombat());}
-void Stop(const char* reason=nullptr,bool failed=false){wheelQueue.Disable();if(core.Stop(failed)&&reason)Notify(reason);running=false;watchClips=false;playback.store(nullptr);view.store(nullptr);}
+void Stop(const char* reason=nullptr,bool failed=false){facialPlayback.Stop();facialTest.Close(true,"dance stop");wheelQueue.Disable();if(core.Stop(failed)&&reason)Notify(reason);running=false;watchClips=false;playback.store(nullptr);view.store(nullptr);}
 void Cleanup(bool touchingWorld=true)noexcept{if(core.State()!=SessionState::Stopping)return;
+ facialPlayback.Stop(touchingWorld);facialTest.Close(touchingWorld,"dance cleanup");
  // Release our input/render gates BEFORE optional engine restoration.
  wheelQueue.Disable();inputGate=false;running=false;watchClips=false;playback.store(nullptr);view.store(nullptr);controlsGated=false;graphPlayable=false;pauseReasons=PauseNoSession;loggedPauseReasons=~0u;progressWatch.Reset();
  auto attempt=[](auto&&action){if(!BestEffort(action))BestEffort([]{SKSE::log::error("A cleanup step failed; continuing independent recovery steps");});};
@@ -209,7 +214,7 @@ void Publish(double seconds){if(!prepared)return;if(prepared->hasDance&&playerGr
 void AttachPrepared(Prepared&& p){if(!SafePlayer())throw std::runtime_error(L10n::T("r0093"));auto*player=RE::PlayerCharacter::GetSingleton();auto*pc=RE::PlayerCamera::GetSingleton();auto*controls=RE::PlayerControls::GetSingleton();if(!pc||!controls||controls->blockPlayerInput)throw std::runtime_error(L10n::T("r0094"));if(!pc->IsInFirstPerson()&&!pc->IsInThirdPerson())throw std::runtime_error(L10n::T("r0095"));if(auto target=pc->cameraTarget.get();target&&target.get()!=player)throw std::runtime_error(L10n::T("r0096"));float speed=0;if(!player->GetGraphVariableFloat("Speed",speed))throw std::runtime_error(L10n::T("r0097"));if(speed>1||player->AsActorState()->IsWeaponDrawn())throw std::runtime_error(L10n::T("r0098"));
  if(!InstallRuntimeHooks()||!oar)throw std::runtime_error(L10n::T("r0099"));
  const bool withCamera=recordedCamera.load();if(!interop::Acquire(true))throw std::runtime_error(L10n::T("r0100"));
- graphPlayable=false;pauseReasons=PauseNoSession|PauseGraph;prepared=std::move(p);audio.Open(std::move(prepared->wave));core.Ready(core.Generation(),ReadyPart::AudioBuffered,true,Now());core.Ready(core.Generation(),ReadyPart::CameraTrack,true,Now());
+ graphPlayable=false;pauseReasons=PauseNoSession|PauseGraph;facialTest.Close(true,"performance preparation completed");facialPlayback.Stop();prepared=std::move(p);audio.Open(std::move(prepared->wave));core.Ready(core.Generation(),ReadyPart::AudioBuffered,true,Now());core.Ready(core.Generation(),ReadyPart::CameraTrack,true,Now());
  if(prepared->hasDance){ if(!player->GetAnimationGraphManager(graphManager)||!graphManager)throw std::runtime_error(L10n::T("r0101"));{RE::BSSpinLockGuard lock(graphManager->GetRuntimeData().updateLock);for(auto&g:graphManager->graphs)if(g&&g->holder==player&&(std::string_view(g->projectName.c_str())=="DefaultFemale"||std::string_view(g->projectName.c_str())=="DefaultMale")){playerGraph=g;break;}if(!playerGraph)for(auto&g:graphManager->graphs)if(g&&g->holder==player){playerGraph=g;break;}}
  if(!playerGraph)throw std::runtime_error(L10n::T("r0102"));SKSE::log::info("Dance body graph: project={} sex={} maleRoute={}",playerGraph->projectName.c_str(),static_cast<int>(player->GetActorBase()->GetSex()),prepared->song.manifest.contains("danceMale"));if(player->GetActorBase()->GetSex()==RE::SEX::kMale&&!prepared->song.manifest.contains("danceMale"))throw std::runtime_error(L10n::T("r0103"));}
 
@@ -231,7 +236,7 @@ void AttachPrepared(Prepared&& p){if(!SafePlayer())throw std::runtime_error(L10n
  generated=0;observedEpoch=0;observation.store(nullptr);observationAt=0;preparedAt=Now();nextDiagnostic=preparedAt+5;lastGraphSeen=Now();calibrationTicks=0;if(withCamera)cameraCalibrated=false;retryIdle=false;nextCollisionLog=nextHelperRepark=nextParkWarning=0;maxPlayerStepSquared=0;protectionResets=0;previousPlayerPosition=stage;Publish(0);Notify(L10n::T("r0106"));
 }
 
-void BeginPrepare(){if(!SafePlayer()){Notify(L10n::T("r0107"));return;}if(RE::UI::GetSingleton()->GameIsPaused()||loadFuture.valid())return;auto selection=ResolveContent(songs,selectedDanceId,selectedCameraId);if(!selection){Notify(L10n::T("r0108"));return;}auto dance=selection->dance,camera=selection->camera;auto epoch=core.Prepare(Now(),45);if(!epoch)return;loadEpoch=*epoch;wheelQueue.Disable();wheelFov.Reset();recordedCamera=camera.has_value();sessionNative=hotkeys.NativePlayback();nextClipTrace=0;Song master=dance?*dance:*camera;SKSE::log::info("Selection: dance={} camera={} audioMaster={} duration={}",selectedDanceId,selectedCameraId,master.id,master.duration);loadFuture=std::async(std::launch::async,[master=std::move(master),dance=std::move(dance),camera=std::move(camera),volume=cfg.volume]()mutable{return Load(std::move(master),std::move(dance),std::move(camera),volume);});Notify(L10n::T("r0109"));}
+void BeginPrepare(){facialTest.Close(true,"dance preparation");if(!SafePlayer()){Notify(L10n::T("r0107"));return;}if(RE::UI::GetSingleton()->GameIsPaused()||loadFuture.valid())return;auto selection=ResolveContent(songs,selectedDanceId,selectedCameraId);if(!selection){Notify(L10n::T("r0108"));return;}auto dance=selection->dance,camera=selection->camera;auto epoch=core.Prepare(Now(),45);if(!epoch)return;loadEpoch=*epoch;wheelQueue.Disable();wheelFov.Reset();recordedCamera=camera.has_value();sessionNative=hotkeys.NativePlayback();nextClipTrace=0;Song master=dance?*dance:*camera;SKSE::log::info("Selection: dance={} camera={} audioMaster={} duration={}",selectedDanceId,selectedCameraId,master.id,master.duration);loadFuture=std::async(std::launch::async,[master=std::move(master),dance=std::move(dance),camera=std::move(camera),volume=cfg.volume]()mutable{return Load(std::move(master),std::move(dance),std::move(camera),volume);});Notify(L10n::T("r0109"));}
 void PublishSongList(std::string error={}){auto data=std::make_shared<PickerList>();data->generation=catalogGeneration;data->loading=catalogPending;data->error=std::move(error);FillPickerTracks(*data,songs);picker.Publish(std::move(data));}
 
 void Select(){if(core.State()!=SessionState::Idle){Notify(L10n::T("r0110"));return;}if(catalogPending||catalogFuture.valid())return;
@@ -287,7 +292,7 @@ void Tick(){
 
  if(wasPaused&&!paused)resumeGraceUntil=Now()+1.;wasPaused=paused;if(withCamera&&!photoActive.load()&&!cameraCalibrated&&!paused&&++calibrationTicks>3){if(Calibrate())cameraCalibrated=true;}
  if(prepared->hasDance&&!retryIdle&&Now()-preparedAt>1.0&&generated.load()<3){retryIdle=true;oar->ClearConditionStateData(player);player->NotifyAnimationGraph("IdleForceDefaultState");}
- bool graphReady=cameraCalibrated&&(!prepared->hasDance||(observedEpoch.load()==core.Generation()&&generated.load()>=3&&(paused||Now()-generatedAt.load()<1.0||Now()<resumeGraceUntil)&&Now()-preparedAt>.7));
+ bool graphReady=(core.State()==SessionState::Playing||(!facialTest.PendingRelease()&&!facialPlayback.Releasing()))&&cameraCalibrated&&(!prepared->hasDance||(observedEpoch.load()==core.Generation()&&generated.load()>=3&&(paused||Now()-generatedAt.load()<1.0||Now()<resumeGraceUntil)&&Now()-preparedAt>.7));
  if(core.State()!=SessionState::Playing)core.Ready(core.Generation(),ReadyPart::PlayerGraph,graphReady,Now());else {
   if(!graphReady&&!paused){if(!recoveringGraph){recoveringGraph=true;SKSE::log::info("Dance priority: graph interrupted; holding audio and recovering until stop");}if(recovery.GraphDue(Now(),false,paused)){oar->ClearConditionStateData(player);player->NotifyAnimationGraph("IdleForceDefaultState");}}
   else if(graphReady&&recoveringGraph){recoveringGraph=false;SKSE::log::info("Dance priority: graph recovered; resuming held audio clock");}
@@ -298,6 +303,7 @@ void Tick(){
  graphPlayable=graphReady;
  if(core.State()==SessionState::Playing){ApplyPlaybackPause(true);paused=(pauseReasons.load()&~PauseGraph)!=0;if(paused||!graphReady)progressWatch.Reset();if(!paused&&graphReady){auto frames=audio.Frames();if(progressWatch.Stalled(Now(),frames,true,cfg.stallSeconds))throw std::runtime_error(L10n::T("r0126"));core.AudioProgress(core.Generation(),frames,audio.Rate());if(core.State()==SessionState::Stopping){Cleanup();return;}if(core.Seconds()>=prepared->song.duration-1./audio.Rate()||audio.Done()){Stop(L10n::T("r0127"));Cleanup();return;}}}
  if(withCamera&&!photoActive.load()&&Now()>=nextFovTrace){nextFovTrace=Now()+5.;if(auto*camera=FindCamera(pc->cameraRoot.get())){auto f=camera->GetRuntimeData2().viewFrustum;SKSE::log::info("FOV projection diagnostic: desired={} owned={} world={} left={} right={} top={} bottom={} near={} ortho={}",wheelFov.Value(prepared->camera.At(core.Seconds()).fov),ownedFov,pc->GetRuntimeData2().worldFOV,f.fLeft,f.fRight,f.fTop,f.fBottom,f.fNear,f.bOrtho);}}
+ if(core.State()==SessionState::Playing&&pauseReasons.load()==0)facialPlayback.Update(prepared->facial,core.Seconds());
  ProcessWheelQueue();Publish(core.State()==SessionState::Playing?core.Seconds():0);
 }
 using UpdateFn=void(*)();UpdateFn originalUpdate{};bool pumpInstalled{};
@@ -317,6 +323,8 @@ void ProcessWheelQueue(){
 void MainUpdate(){
  BestEffort([]{SyncPhotoState();});if(GetCurrentThreadId()==mainThread.load())BestEffort([]{UpdateWheelAdmission();});
  originalUpdate();BestEffort([]{SyncPhotoState();});DWORD current=GetCurrentThreadId(),unset=0;mainThread.compare_exchange_strong(unset,current);if(current!=mainThread.load())return;
+ if(facialPlayback.Releasing()||facialTest.PendingRelease()){bool suspended=PhotoMode::Frozen()||(RE::UI::GetSingleton()&&RE::UI::GetSingleton()->GameIsPaused());if(facialPlayback.Releasing())facialPlayback.Drain(world.load(),suspended);if(facialTest.PendingRelease())facialTest.PollRestore(world.load(),suspended);}
+ facialTest.Pump(world.load(),!facialPlayback.Releasing()&&!(prepared&&!prepared->facial.segments.empty()));
  if(!world&&core.State()==SessionState::Idle&&!loadFuture.valid()){wheelQueue.Disable();return;}
  try{Tick();inputState=core.State();UpdateWheelAdmission();}catch(const std::exception&e){Stop(nullptr,true);Cleanup();inputState=core.State();BestEffort([&]{Notify(std::string(L10n::T("r0151"))+e.what());});}catch(...){Stop(nullptr,true);Cleanup();inputState=core.State();}
 }
@@ -355,17 +363,19 @@ struct Menus:RE::BSTEventSink<RE::MenuOpenCloseEvent> {
  void Reset(){std::scoped_lock lock(mutex);pausing.clear();menuSuspended=false;}
 }menus;
 
-void WorldReset(bool valid){wheelQueue.Disable();deferredInteractive.reset();deferredFov.reset();photoRequestUntil=0;userPaused=false;photoActive=false;hud.Restore();backgroundMute.Restore();picker.Cancel();pendingPick.reset();++catalogGeneration;commands=0;Stop();Cleanup(valid);deferredInteractive.reset();if(!valid){std::scoped_lock lock(clipsLock);clips.clear();clipCount=0;}if(selector)selector->value=0;world=false;inputState=SessionState::Idle;menus.Reset();}
+void WorldReset(bool valid){facialPlayback.Stop(valid);facialTest.Close(valid,"world reset");wheelQueue.Disable();deferredInteractive.reset();deferredFov.reset();photoRequestUntil=0;userPaused=false;photoActive=false;hud.Restore();backgroundMute.Restore();picker.Cancel();pendingPick.reset();++catalogGeneration;commands=0;Stop();Cleanup(valid);deferredInteractive.reset();if(!valid){std::scoped_lock lock(clipsLock);clips.clear();clipCount=0;}if(selector)selector->value=0;world=false;inputState=SessionState::Idle;menus.Reset();}
 void ResolveBackgroundCategories(){
  backgroundCategories.clear();auto path=std::filesystem::path(L"Data\\SKSE\\Plugins\\DanceStudio\\BackgroundAudio.json");
+
  auto fallback=[](){backgroundCategories.clear();auto*defaults=RE::BGSDefaultObjectManager::GetSingleton();if(defaults)if(auto*music=defaults->GetObject<RE::BGSSoundCategory>(RE::BGSDefaultObjectManager::DefaultObject::kMusicSoundCategory))backgroundCategories.push_back(music);};
- try{if(std::filesystem::exists(path)){auto j=ReadJson(path,16384);if(j.at("schemaVersion")!=1||!j.at("categories").is_array()||j.at("categories").size()>64)throw std::runtime_error(L10n::T("r0129"));for(auto&row:j.at("categories")){auto plugin=row.at("plugin").get<std::string>(),text=row.at("formId").get<std::string>();size_t used=0;auto id=std::stoul(text,&used,16);if(used!=text.size()||id>0xFFFFFF||plugin.empty())throw std::runtime_error(L10n::T("r0130"));auto*category=RE::TESDataHandler::GetSingleton()->LookupForm<RE::BGSSoundCategory>(static_cast<RE::FormID>(id),plugin);if(!category)throw std::runtime_error(L10n::T("r0131")+plugin+":"+text);backgroundCategories.push_back(category);}}
+ try{if(!std::filesystem::exists(path))path.replace_filename(L"BackgroundAudio.defaults.json");if(std::filesystem::exists(path)){auto j=ReadJson(path,16384);if(j.at("schemaVersion")!=1||!j.at("categories").is_array()||j.at("categories").size()>64)throw std::runtime_error(L10n::T("r0129"));for(auto&row:j.at("categories")){auto plugin=row.at("plugin").get<std::string>(),text=row.at("formId").get<std::string>();size_t used=0;auto id=std::stoul(text,&used,16);if(used!=text.size()||id>0xFFFFFF||plugin.empty())throw std::runtime_error(L10n::T("r0130"));auto*category=RE::TESDataHandler::GetSingleton()->LookupForm<RE::BGSSoundCategory>(static_cast<RE::FormID>(id),plugin);if(!category)throw std::runtime_error(L10n::T("r0131")+plugin+":"+text);backgroundCategories.push_back(category);}}
  else{fallback();SKSE::log::warn("BackgroundAudio.json missing: only default music category available");}
  }catch(const std::exception&e){fallback();SKSE::log::error("Background audio configuration rejected; music-only fallback: {}",e.what());}
 
  SKSE::log::info("Background audio configuration: {} categories",backgroundCategories.size());
 }
 void RegisterMenus(const char*stage){
+ facialTest.Register();
  std::string pickerError,settingsError;bool pickerOK=false,settingsOK=false;
  BestEffort([&]{pickerOK=picker.Register(pickerError);});
  BestEffort([&]{settingsOK=settings.Register(settingsError);});
