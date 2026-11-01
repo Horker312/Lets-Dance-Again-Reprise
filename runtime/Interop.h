@@ -32,7 +32,7 @@ inline SmoothCam1* camera=nullptr;
 inline bool ownMovement=false,ownHead=false,ownCamera=false;
 inline bool cameraPresent=false,tdmPresent=false;
 inline void Release(){auto h=SKSE::GetPluginHandle();
- if(ownCamera&&camera)camera->ReleaseCamera(h);
+ if(ownCamera&&camera){auto owner=camera->CameraOwner();auto result=owner==h?camera->ReleaseCamera(h):Result::NotOwner;SKSE::log::info("SmoothCam camera release: previousOwner={} result={}",owner,static_cast<unsigned>(result));}
  if(ownHead&&tdm)tdm->ReleaseHead(h);
  if(ownMovement&&tdm)tdm->ReleaseDirectional(h);
  ownCamera=ownHead=ownMovement=false;
@@ -44,7 +44,7 @@ inline bool Acquire(bool useCamera=true){auto h=SKSE::GetPluginHandle();
  if(tdm){if(tdm->Locked())return false;
   ownMovement=Granted(tdm->DisableDirectional(h));if(!ownMovement)return false;
   ownHead=Granted(tdm->DisableHead(h));if(!ownHead){Release();return false;}}
- if(useCamera&&camera){ownCamera=Granted(camera->RequestCamera(h));if(!ownCamera){Release();return false;}}
+ if(useCamera&&camera){auto result=camera->RequestCamera(h);auto owner=camera->CameraOwner();ownCamera=Granted(result)&&owner==h;SKSE::log::info("SmoothCam camera request before state capture: result={} owner={} expected={} acquired={}",static_cast<unsigned>(result),owner,h,ownCamera);if(!ownCamera){Release();return false;}}
  return true;
 }
 inline void InitTDM(){auto m=GetModuleHandleW(L"TrueDirectionalMovement.dll");tdmPresent=m!=nullptr;if(!m)return;
@@ -58,6 +58,7 @@ inline void RegisterCamera(){cameraPresent=GetModuleHandleW(L"SmoothCam.dll")!=n
   auto*c=static_cast<Container*>(r->data);if(c->version==0)camera=static_cast<SmoothCam1*>(c->instance);
  });
 }
+inline bool CameraConfirmed(){return !cameraPresent||(camera&&ownCamera&&camera->CameraOwner()==SKSE::GetPluginHandle());}
 inline void RequestCamera(){if(!cameraPresent)return;
  struct Request{std::uint8_t version=0;}request;
  struct Command{std::uint32_t header=0x9007CA50;std::uint8_t type=0;void*data;}command;

@@ -13,7 +13,7 @@
 
 namespace DanceStudio {
 struct PickerSong {std::string id,title;unsigned token{};double duration{};};
-struct PickerList {std::uint64_t generation{};std::vector<PickerSong> dances,cameras;bool loading{};std::string error;};
+struct PickerList {std::uint64_t generation{};std::vector<PickerSong> dances,cameras;bool loading{};std::string error,summary;};
 inline void FillPickerTracks(PickerList&out,const std::vector<Song>&songs){out.dances.clear();out.cameras.clear();for(auto&s:songs){if(s.HasDance())out.dances.push_back({s.id,s.title,s.token,s.duration});if(s.HasCamera())out.cameras.push_back({s.id,s.title,s.token,s.duration});}auto order=[](const PickerSong&a,const PickerSong&b){if(a.title!=b.title)return a.title<b.title;return a.id<b.id;};std::sort(out.dances.begin(),out.dances.end(),order);std::sort(out.cameras.begin(),out.cameras.end(),order);}
 struct PickerChoice {std::uint64_t generation{},cycle{};std::string id;unsigned token{};std::string cameraId;};
 class SongPicker {
@@ -29,20 +29,24 @@ class SongPicker {
  static inline SongPicker* instance{};
  template<class T>static T Fn(HMODULE m,const char*n){return reinterpret_cast<T>(GetProcAddress(m,n));}
  static void __stdcall Draw()noexcept{if(instance)instance->Render();}
+ static size_t SafeTitleEnd(const std::string&s,size_t n){while(n>0&&n<s.size()&&(static_cast<unsigned char>(s[n])&0xC0)==0x80)--n;return n;}
+ bool details{},callbackLogged{},errorLogged{};
  void Render()noexcept{
-  bool began=false;try{
+  bool began=false;try{if(!callbackLogged){callbackLogged=true;SKSE::log::info("SongPicker render callback entered");}
    auto session=cycle.load();bool open=window->IsOpen.load();bool visible=begin(L10n::T("r0023"),&open,64);began=true;
    if(!open){window->IsOpen=false;choice.store(nullptr);}
    if(visible&&open){auto snapshot=list.load();if(snapshot!=displayed||localeRevision!=L10n::revision.load()){localeRevision=L10n::revision.load();
      std::string old=displayed&&selected>0&&selected<=static_cast<int>(displayed->dances.size())?displayed->dances[selected-1].id:rememberedDance;std::string oldCam=displayed&&selectedCamera>0&&selectedCamera<=static_cast<int>(displayed->cameras.size())?displayed->cameras[selectedCamera-1].id:rememberedCamera;
      rememberedDance=old;rememberedCamera=oldCam;displayed=snapshot;labels={L10n::T("r0024")};cameraLabels={L10n::T("r0025")};items.clear();cameraItems.clear();selected=selectedCamera=0;
-     if(displayed){for(auto&s:displayed->dances){labels.push_back(s.title+" ["+s.id+"]");if(s.id==old)selected=static_cast<int>(labels.size()-1);}for(auto&s:displayed->cameras){cameraLabels.push_back(s.title+" ["+s.id+"]");if(s.id==oldCam)selectedCamera=static_cast<int>(cameraLabels.size()-1);}}
+     if(displayed){for(auto&s:displayed->dances){labels.push_back(s.title.size()>120?s.title.substr(0,SafeTitleEnd(s.title,120))+"…":s.title);if(s.id==old)selected=static_cast<int>(labels.size()-1);}for(auto&s:displayed->cameras){cameraLabels.push_back(s.title.size()>120?s.title.substr(0,SafeTitleEnd(s.title,120))+"…":s.title);if(s.id==oldCam)selectedCamera=static_cast<int>(cameraLabels.size()-1);}}
      for(auto&s:labels)items.push_back(s.c_str());for(auto&s:cameraLabels)cameraItems.push_back(s.c_str());
     }
     if(displayed&&!displayed->loading)if(auto wanted=preferred.exchange(nullptr)){for(size_t i=0;i<displayed->dances.size();++i)if(displayed->dances[i].id==*wanted)selected=static_cast<int>(i+1);}
     text(L10n::T("r0026"),nullptr);text(L10n::T("r0027"),nullptr);
     if(!displayed||displayed->loading)text(L10n::T("r0028"),nullptr);else if(!displayed->error.empty())text(displayed->error.c_str(),nullptr);else{
      if(width)width(520);if(combo(L10n::T("r0029"),&selected,items.data(),static_cast<int>(items.size()),16))rememberedDance=selected>0?displayed->dances[selected-1].id:"";if(width)width(520);if(combo(L10n::T("r0030"),&selectedCamera,cameraItems.data(),static_cast<int>(cameraItems.size()),16))rememberedCamera=selectedCamera>0?displayed->cameras[selectedCamera-1].id:"";
+     if(!displayed->summary.empty())text(displayed->summary.c_str(),nullptr);
+     if(checkbox(L10n::T("qPickerDetails"),&details)){}if(details){if(selected>0){auto value=displayed->dances[selected-1].title+" / ID: "+displayed->dances[selected-1].id;text(value.c_str(),nullptr);}if(selectedCamera>0){auto value=displayed->cameras[selectedCamera-1].title+" / ID: "+displayed->cameras[selectedCamera-1].id;text(value.c_str(),nullptr);}}
      if(framing){auto tuning=framing->Current();bool enabled=tuning.scaleEnabled;if(checkbox(L10n::T("r0161"),&enabled)){tuning.scaleEnabled=enabled;framing->Save(tuning,framingError);}text(L10n::T("r0162"),nullptr);if(!framingError.empty())text(framingError.c_str(),nullptr);}
      text(L10n::T("r0163"),nullptr);
      if(selected>0||selectedCamera>0){const auto&master=selected>0?displayed->dances[selected-1]:displayed->cameras[selectedCamera-1];auto info=L10n::T("r0031")+master.title+" / "+std::to_string(master.duration)+L10n::T("r0032");text(info.c_str(),nullptr);}
@@ -53,7 +57,7 @@ class SongPicker {
     if(button(L10n::T("r0036"))){window->IsOpen=false;choice.store(nullptr);}
    }
    end();began=false;
-  }catch(...){if(began)end();}
+  }catch(...){if(began)try{end();}catch(...){}if(!errorLogged){errorLogged=true;try{SKSE::log::error("SongPicker render exception (further errors suppressed)");}catch(...){}}}
  }
 public:
  explicit SongPicker(CameraFramingStore* store=nullptr):framing(store){}

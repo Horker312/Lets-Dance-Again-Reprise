@@ -24,7 +24,7 @@ class SettingsMenu {
     GetWindow window{}; Blocking blocking{};
     std::atomic<bool> ready{};
     Store& store; bool(*idle)();
-    bool(*hasPhoto)(){};
+    bool(*hasPhoto)(){};bool(*hasDiagnostics)(){};
     CameraFramingStore* framing{};
     std::vector<std::string> percentLabels;std::vector<const char*> percentItems;
     Bindings draft{};bool draftNative{}; unsigned menuKey{65};
@@ -60,8 +60,10 @@ class SettingsMenu {
         if(button(L10n::T("r0156"))){t={};changed=true;}
         if(changed){std::string error;status=framing->Save(t,error)?L10n::T("r0157"):std::string(L10n::T("r0018"))+error;}
     }
+    bool callbackLogged{},renderErrorLogged{};
     void Render() noexcept {
         try {
+            if(!callbackLogged){callbackLogged=true;SKSE::log::info("SettingsMenu callback entered");}
             std::scoped_lock lock(mutex);
             Line((std::string(ProductName)+" "+RuntimeVersion).c_str());
             int selectedLanguage=static_cast<int>(L10n::language.load());const char*languages[]={"한국어","English"};
@@ -73,9 +75,9 @@ class SettingsMenu {
             if (!idle()) { Line(L10n::T("r0005")); return; }
             Line(L10n::T("r0006"));
             FramingControls();
-            checkbox(L10n::T("r0007"),&draftNative);
+            if(hasDiagnostics&&hasDiagnostics()){checkbox(L10n::T("r0007"),&draftNative);
             Line(L10n::T("r0008"));
-            Line(L10n::T("r0009"));
+            Line(L10n::T("r0009"));}
             Select(L10n::T("r0010"),draft.start);
             Select(L10n::T("r0011"),draft.stop);
             Select(L10n::T("r0012"),draft.hud);
@@ -92,10 +94,10 @@ class SettingsMenu {
             if (button(L10n::T("r0021"))) { draft=store.Current();draftNative=store.NativePlayback(); status=L10n::T("r0022"); }
             auto error=Validate(draft,menuKey); if (!error.empty()) Line(error.c_str());
             if (!status.empty()) Line(status.c_str());
-        } catch (...) { /* Never unwind through a foreign render callback. */ }
+        } catch (const std::exception& e) { if(!renderErrorLogged){renderErrorLogged=true;try{SKSE::log::error("SettingsMenu render exception (further errors suppressed): {}",e.what());}catch(...){}} } catch (...) { if(!renderErrorLogged){renderErrorLogged=true;try{SKSE::log::error("SettingsMenu render exception: unknown (further errors suppressed)");}catch(...){}} }
     }
 public:
-    SettingsMenu(Store& s,bool(*isIdle)(),bool(*photoAvailable)()=nullptr,CameraFramingStore* cameraFraming=nullptr) : store(s),idle(isIdle),hasPhoto(photoAvailable),framing(cameraFraming) {}
+    SettingsMenu(Store& s,bool(*isIdle)(),bool(*photoAvailable)()=nullptr,CameraFramingStore* cameraFraming=nullptr,bool(*diagnostics)()=nullptr) : store(s),idle(isIdle),hasPhoto(photoAvailable),hasDiagnostics(diagnostics),framing(cameraFraming) {}
     bool Open() const {
         if (!ready.load(std::memory_order_acquire)) return false;
         auto* main=window();
@@ -106,13 +108,14 @@ public:
         auto mod=GetModuleHandleW(L"SKSEMenuFramework.dll");
         if (!mod) { error=L10n::T("r0142"); return false; }
         auto api=Export<unsigned(*)()>(mod,"GetMenuFrameworkAPIVersion");
-        if (!api || api()!=1) { error=L10n::T("r0143"); return false; }
+        unsigned apiVersion=api?api():0;SKSE::log::info("SettingsMenu framework module={} API={}",reinterpret_cast<std::uintptr_t>(mod),apiVersion);char loadedPath[32768]{};if(GetModuleFileNameA(mod,loadedPath,32768)){SKSE::log::info("SettingsMenu framework path (Windows ANSI): {}",loadedPath);}
+        if (!api || apiVersion!=1) { error=L10n::T("r0143"); return false; }
         auto add=Export<Add>(mod,"AddSectionItem"); window=Export<GetWindow>(mod,"GetMainWindow");
         text=Export<Text>(mod,"igTextUnformatted"); button=Export<Button>(mod,"igSmallButton");checkbox=Export<Checkbox>(mod,"igCheckbox"); combo=Export<Combo>(mod,"igCombo_Str_arr"); blocking=Export<Blocking>(mod,"IsAnyBlockingWindowOpened");
         pushWrap=Export<void(*)(float)>(mod,"igPushTextWrapPos");popWrap=Export<void(*)()>(mod,"igPopTextWrapPos");
-        if (!add || !window || !text || !button || !combo || !checkbox || !blocking) { error=L10n::T("r0144"); return false; }
+        if (!add || !window || !text || !button || !combo || !checkbox || !blocking) { SKSE::log::error("SettingsMenu missing exports: add={} window={} text={} button={} combo={} checkbox={} blocking={}",!!add,!!window,!!text,!!button,!!combo,!!checkbox,!!blocking);error=L10n::T("r0144"); return false; }
         menuKey=MenuKey(); draft=store.Current();draftNative=store.NativePlayback(); Choices(); instance=this;
-        add(SettingsPath,Draw);
+        SKSE::log::info("SettingsMenu AddSectionItem: {}",SettingsPath);add(SettingsPath,Draw);SKSE::log::info("SettingsMenu registration returned; callback entry logged separately");
         ready.store(true,std::memory_order_release);return true;
     }
 };

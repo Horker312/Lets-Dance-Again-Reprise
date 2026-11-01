@@ -180,5 +180,17 @@
   "r0179": "모든 표정 제어 종료·복원",
   "r0180": "감정만 종료·복원",
   "r0181": "Modifier만 종료·복원",
-  "r0182": "Phoneme만 종료·복원"
+  "r0182": "Phoneme만 종료·복원",
+  "qPickerDetails": "선택한 곡의 제목·ID 상세",
+  "qCatalog": "목록: ",
+  "qRejected": "읽기 실패 ",
+  "qOlder": "구버전 제외 ",
+  "qCollisions": "토큰 충돌 제외 ",
+  "qScanLimit": " · 검색/선택 한도에 도달했습니다.",
+  "qSeeLog": " · 자세한 원인: DanceStudio.log",
+  "qFacialWarning": "이 곡의 표정 데이터를 읽지 못했습니다. 공연은 계속 재생됩니다. ",
+  "qFacial_missing": "(파일 누락)",
+  "qFacial_integrity": "(무결성/파일 읽기 오류)",
+  "qFacial_invalid": "(손상된 데이터)",
+  "qFacial_unsupported": "(지원하지 않는 형식)"
 }

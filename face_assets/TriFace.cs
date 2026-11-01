@@ -5,6 +5,16 @@ namespace FaceAssets;
 public sealed class TriFace {
  public Point3D[] Vertices {get;private set;}=[];public int[] Indices {get;private set;}=[];
  public Dictionary<string,Vector3D[]> Morphs {get;}=new(StringComparer.OrdinalIgnoreCase);
+ public List<string> Warnings{get;}=[];
+ public HashSet<string> Conflicts{get;}=new(StringComparer.OrdinalIgnoreCase);
+ void Merge(string name,Vector3D[] delta){
+  if(Conflicts.Contains(name))return;
+  if(Morphs.TryGetValue(name,out var old)){
+   if(old.SequenceEqual(delta)){Warnings.Add("Identical duplicate TRI morph merged: "+name);return;}
+   Morphs.Remove(name);Conflicts.Add(name);Warnings.Add("Conflicting TRI morph excluded: "+name);return;
+  }
+  Morphs.Add(name,delta);
+ }
  public static TriFace Read(string path){
   if(new FileInfo(path).Length>64*1024*1024)throw new InvalidDataException("TRI 파일이 너무 큽니다.");using var r=new BinaryReader(File.OpenRead(path));
   if(Encoding.ASCII.GetString(r.ReadBytes(8))!="FRTRI003")throw new InvalidDataException("FRTRI003 얼굴 TRI만 지원합니다. NIF/PIRT/압축 파일은 지원하지 않습니다.");
@@ -16,12 +26,13 @@ public sealed class TriFace {
   int Index(){int n=r.ReadInt32();if(n<0||n>=v)throw new InvalidDataException("TRI 정점 인덱스가 잘못되었습니다.");return n;}
   var indices=new List<int>();for(int i=0;i<t;i++){indices.Add(Index());indices.Add(Index());indices.Add(Index());}for(int i=0;i<q;i++){int a=Index(),b=Index(),c=Index(),d=Index();indices.AddRange([a,b,c,a,c,d]);}face.Indices=indices.ToArray();
   if((ext&1)!=0){long skip=(long)uv*8+(long)t*12+(long)q*16;if(skip>r.BaseStream.Length-r.BaseStream.Position)throw new EndOfStreamException();r.BaseStream.Seek(skip,SeekOrigin.Current);}
-  for(int i=0;i<md;i++){int n=Count(1024);if(n<1)throw new InvalidDataException("빈 모프 이름입니다.");var bytes=r.ReadBytes(n);if(bytes.Length!=n)throw new EndOfStreamException();string name=new UTF8Encoding(false,true).GetString(bytes).TrimEnd('\0');if(name.Length==0||face.Morphs.ContainsKey(name))throw new InvalidDataException("빈 이름/중복 모프입니다.");float scale=Float();var delta=new Vector3D[v];for(int j=0;j<v;j++)delta[j]=new(r.ReadInt16()*scale,r.ReadInt16()*scale,r.ReadInt16()*scale);face.Morphs.Add(name,delta);}
+  for(int i=0;i<md;i++){int n=Count(1024);if(n<1)throw new InvalidDataException("빈 모프 이름입니다.");var bytes=r.ReadBytes(n);if(bytes.Length!=n)throw new EndOfStreamException();string name=new UTF8Encoding(false,true).GetString(bytes).TrimEnd('\0');if(name.Length==0||name.Contains('\0'))throw new InvalidDataException("빈/잘못된 모프 이름입니다.");float scale=Float();var delta=new Vector3D[v];for(int j=0;j<v;j++)delta[j]=new(r.ReadInt16()*scale,r.ReadInt16()*scale,r.ReadInt16()*scale);face.Merge(name,delta);}
   if(r.BaseStream.Position!=r.BaseStream.Length)throw new InvalidDataException("지원하지 않는 TRI 후속 데이터입니다.");return face;
  }
+ public TriFace Clone(){var t=new TriFace{Vertices=(Point3D[])Vertices.Clone(),Indices=(int[])Indices.Clone()};foreach(var m in Morphs)t.Morphs.Add(m.Key,(Vector3D[])m.Value.Clone());t.Conflicts.UnionWith(Conflicts);t.Warnings.AddRange(Warnings);return t;}
  public bool SameTopology(TriFace extra)=>Vertices.Length==extra.Vertices.Length&&Indices.SequenceEqual(extra.Indices);
  public bool SameReference(TriFace extra)=>SameTopology(extra)&&!Vertices.Where((v,i)=>(v-extra.Vertices[i]).Length>.001).Any();
- public void AddMorphs(TriFace extra,bool allowReferenceDifference=false){if(!SameTopology(extra)||(!allowReferenceDifference&&!SameReference(extra)))throw new InvalidDataException("기본 정점·순서·면이 다른 TRI입니다. 호환성을 추정하지 않습니다.");if(extra.Morphs.Keys.Any(Morphs.ContainsKey))throw new InvalidDataException("모프 이름이 중복됩니다.");foreach(var kv in extra.Morphs)Morphs.Add(kv.Key,kv.Value);}
+ public void AddMorphs(TriFace extra,bool allowReferenceDifference=false){if(!SameTopology(extra)||(!allowReferenceDifference&&!SameReference(extra)))throw new InvalidDataException("기본 정점·순서·면이 다른 TRI입니다. 호환성을 추정하지 않습니다.");if((long)Vertices.Length*(Morphs.Count+extra.Morphs.Count)>4000000)throw new InvalidDataException("Combined TRI morph budget exceeded.");foreach(var name in extra.Conflicts){Morphs.Remove(name);Conflicts.Add(name);}Warnings.AddRange(extra.Warnings);foreach(var kv in extra.Morphs)Merge(kv.Key,kv.Value);}
  public Point3D[] Evaluate(IEnumerable<(string name,double weight)> weights){var result=(Point3D[])Vertices.Clone();foreach(var (name,w) in weights){if(!double.IsFinite(w)||!Morphs.TryGetValue(name,out var delta))continue;double weight=Math.Clamp(w,0,1);for(int i=0;i<result.Length;i++)result[i]+=delta[i]*weight;}return result;}
  public static string? MfgName(string id){var parts=id.Split(':');if(parts.Length!=2||!int.TryParse(parts[1],out int n)||n<0)return null;
   string[] names=parts[0] switch {

@@ -8,6 +8,7 @@ using System.Windows.Media.Imaging;
 namespace DanceStudio;
 public static class Program {
  [STAThread] public static void Main(string[] args) {
+  StartupDiagnostics.Start(args);
   try {
    if(args.Length>0&&args[0]=="--lifetime-test"){LifetimeTests.Run(args.Skip(1).ToArray());return;}
    if(args.Length>0&&args[0]=="--localization-test"){LocalizationTests.Run(args[1]);return;}
@@ -80,7 +81,7 @@ public static class Program {
     };
    }else if(args.Length>0&&File.Exists(args[0]))window.Loaded+=async(_,_)=>{try{await window.LoadProject(SongProject.Load(args[0]));}catch(Exception ex){MessageBox.Show(ex.Message,UiText.T("t0319"));}};
    app.Run(window);
-  } catch(Exception ex) {File.WriteAllText(Path.Combine(AppContext.BaseDirectory,"error.txt"),ex.ToString());Environment.ExitCode=1;}
+  } catch(Exception ex) {StartupDiagnostics.Error("Startup failure",ex);try{MessageBox.Show(UiText.T("diagStartup")+"\n"+ex.GetType().Name+": "+ex.Message+"\nLog: "+StartupDiagnostics.LogPath,Brand.Name);}catch{}Environment.ExitCode=1;}
  }
 }
 

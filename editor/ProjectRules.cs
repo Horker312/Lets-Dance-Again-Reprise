@@ -9,6 +9,7 @@ public static class ProjectRules {
   if(string.IsNullOrWhiteSpace(p.Id)||Encoding.UTF8.GetByteCount(p.Id)>128||string.IsNullOrWhiteSpace(p.Title)||p.Title.Length>256)throw new InvalidDataException(UiText.T("t0321"));
   p.PackageIds??=new();
   if(p.PackageIds.Count>3||p.PackageIds.Any(x=>x.Key is not ("both" or "dance" or "camera")||string.IsNullOrWhiteSpace(x.Value)||Encoding.UTF8.GetByteCount(x.Value)>128)||p.PackageIds.Values.Distinct(StringComparer.Ordinal).Count()!=p.PackageIds.Count)throw new InvalidDataException(UiText.T("t0322"));
+  if(p.SourceFingerprints==null||p.SourceFingerprints.Count>4||p.SourceFingerprints.Any(k=>k.Key is not ("dance" or "camera" or "audio" or "skeleton")||k.Value==null||k.Value.Size<0||k.Value.Sha256==null||k.Value.Sha256.Length!=64||!k.Value.Sha256.All(Uri.IsHexDigit)))throw new InvalidDataException("Invalid source fingerprints");
   PoseEdits.Validate(p);
   if(p.Verification==null)throw new InvalidDataException(UiText.T("t0323"));p.Verification.Validate();
   foreach(var track in new[]{p.Dance,p.Camera}){if(track.HkxBindingIndex is <0)throw new InvalidDataException(UiText.T("t0324"));if(track.IdentityRigProof!=null&&(track.IdentityRigProof.Length!=64||!track.IdentityRigProof.All(Uri.IsHexDigit)))throw new InvalidDataException(UiText.T("t0325"));}

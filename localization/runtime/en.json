@@ -180,5 +180,17 @@
   "r0179": "End / restore all facial control",
   "r0180": "End / restore expression only",
   "r0181": "End / restore modifiers only",
-  "r0182": "End / restore phonemes only"
+  "r0182": "End / restore phonemes only",
+  "qPickerDetails": "Selected track title / ID details",
+  "qCatalog": "Tracks: ",
+  "qRejected": "invalid ",
+  "qOlder": "older ",
+  "qCollisions": "token conflicts ",
+  "qScanLimit": " · Scan/selection limit reached.",
+  "qSeeLog": " · See DanceStudio.log.",
+  "qFacialWarning": "Facial data could not be loaded. The performance continues. ",
+  "qFacial_missing": "(missing file)",
+  "qFacial_integrity": "(integrity/read failure)",
+  "qFacial_invalid": "(invalid data)",
+  "qFacial_unsupported": "(unsupported format)"
 }

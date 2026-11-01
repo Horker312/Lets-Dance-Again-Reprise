@@ -3,6 +3,7 @@
 #include "MfgFrames.h"
 #include "FacialRuntimePolicy.h"
 #include "Localization.h"
+#include "ProductInfo.h"
 // Official resource uses the generic Win32 macro with a wide literal.
 // Scope that compatibility macro; keep the upstream header byte-for-byte.
 #pragma push_macro("GetModuleHandle")
@@ -151,7 +152,7 @@ public:
  void Register(){if(registered)return;auto mod=GetModuleHandleW(L"SKSEMenuFramework.dll");if(!mod)return;
   auto get=[&](auto&out,const char*n){out=reinterpret_cast<std::remove_reference_t<decltype(out)>>(GetProcAddress(mod,n));};
   unsigned(*version)(){};void(*add)(const char*,void(__stdcall*)()){};get(version,"GetMenuFrameworkAPIVersion");get(add,"AddSectionItem");get(text,"igTextUnformatted");get(button,"igSmallButton");get(check,"igCheckbox");get(combo,"igCombo_Str_arr");
-  if(!version||version()!=1||!add||!text||!button||!check||!combo)return;instance=this;add("LDA:R/Facial Test",Draw);registered=true;
+  if(!version||version()!=1||!add||!text||!button||!check||!combo)return;instance=this;add(FacialTestPath,Draw);registered=true;
  }
  // Lifecycle callers execute on engine thread. No destructor calls into engine.
  void Close(bool restore,const char*reason,bool deferPending=true)noexcept{try{

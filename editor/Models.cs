@@ -28,6 +28,7 @@ public sealed class TrackEdit {
  }
 }
 public sealed class SongProject {
+ public Dictionary<string,SourceFingerprint> SourceFingerprints {get;set;}=new();
  public List<FacialPresets.FacialSegment> FacialTracks {get;set;}=[];
  public int SchemaVersion {get;set;}=5;
  public string Id {get;set;}=Guid.NewGuid().ToString("N");
@@ -68,7 +69,7 @@ public sealed class SongProject {
   ProjectRules.Validate(this);
   string destination=System.IO.Path.GetFullPath(path);
   if(new[]{Dance.Path,Camera.Path,Audio.Path,Skeleton}.Where(x=>!string.IsNullOrEmpty(x)&&!Rig.IsBuiltin(x)).Any(x=>string.Equals(System.IO.Path.GetFullPath(x),destination,StringComparison.OrdinalIgnoreCase)))throw new IOException(UiText.T("t0248"));
-  var copy=JsonSerializer.Deserialize<SongProject>(JsonSerializer.Serialize(this,Json))!;copy.SchemaVersion=5;
+  var copy=JsonSerializer.Deserialize<SongProject>(JsonSerializer.Serialize(this,Json))!;copy.SchemaVersion=5;foreach(var source in ProjectRelink.Paths(this))if(source.Value.Length>0&&!Rig.IsBuiltin(source.Value)&&File.Exists(source.Value))copy.SourceFingerprints[source.Key]=ProjectRelink.Fingerprint(source.Value);
   string folder=System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(path))!;
   foreach(var t in new[]{copy.Dance,copy.Camera,copy.Audio})
    if(t.Path.Length>0)t.Path=System.IO.Path.GetRelativePath(folder,t.Path);
