@@ -13,8 +13,8 @@ p.add_argument('--commonlib-library',type=Path,help='Optional matching SE+AE Com
 p.add_argument('--compiler',default='cl.exe');p.add_argument('--jobs',type=int,default=4)
 a=p.parse_args();b=ROOT/'build/native';b.mkdir(parents=True,exist_ok=True);sdk=ROOT/'vendor/CommonLibSSE-NG'
 flags=['/nologo','/c','/EHsc','/utf-8','/permissive-','/Zc:__cplusplus','/Zc:preprocessor','/O2','/Ob2','/DNDEBUG','/std:c++latest','/MD','/Z7']
-defines=['/DENABLE_SKYRIM_SE=1','/DENABLE_SKYRIM_AE=1','/DNOMINMAX','/DWIN32_LEAN_AND_MEAN','/DSPDLOG_COMPILED_LIB','/DSPDLOG_FMT_EXTERNAL','/DWINVER=0x0601','/D_WIN32_WINNT=0x0601','/DCOMMONLIB_VERSION="10.1.0"']
-includes=['/I'+str(x.resolve())for x in [sdk/'include',a.dependencies/'include',a.dependencies/'include/directxtk',a.json_include,a.rapidcsv_include]]
+defines=['/DENABLE_SKYRIM_SE=1','/DENABLE_SKYRIM_AE=1','/DHAS_SKYRIM_MULTI_TARGETING=1','/DNOMINMAX','/DWIN32_LEAN_AND_MEAN','/DSPDLOG_COMPILED_LIB','/DSPDLOG_FMT_EXTERNAL','/DWINVER=0x0601','/D_WIN32_WINNT=0x0601','/DCOMMONLIB_VERSION="10.1.0"']
+includes=['/I'+str(x.resolve())for x in [sdk/'include',sdk/'extern/openvr/headers',a.dependencies/'include',a.dependencies/'include/directxtk',a.json_include,a.rapidcsv_include]]
 def run(label,args):
  q=subprocess.run([str(x)for x in args],capture_output=True,text=True,errors='replace');(b/(label+'.txt')).write_text(q.stdout+q.stderr,encoding='utf-8')
  if q.returncode:raise RuntimeError(label+' failed: '+(q.stdout+q.stderr)[-7000:])
@@ -29,7 +29,7 @@ if lib is None:
   label=source.relative_to(sdk).as_posix().replace('/','_')
   run(label,[cl,*flags,*defines,*includes,'/YuSKSE/Impl/PCH.h','/FISKSE/Impl/PCH.h','/Fp'+str(pch),'/Fo'+str(obj),source]);return obj
  with concurrent.futures.ThreadPoolExecutor(max_workers=max(1,min(a.jobs,16)))as pool:objects=list(pool.map(compile_sdk,sources))
- lib=b/'CommonLibSSE-SE.lib';rsp=b/'sdk.rsp';rsp.write_text('\n'.join('"'+str(x)+'"'for x in[pth.resolve()for pth in [*objects,pchobj]]))
+ lib=b/'CommonLibSSE-SE-AE.lib';rsp=b/'sdk.rsp';rsp.write_text('\n'.join('"'+str(x)+'"'for x in[pth.resolve()for pth in [*objects,pchobj]]))
  run('sdk_link',[librarian,'/NOLOGO','/OUT:'+str(lib),'@'+str(rsp)])
 subprocess.run([sys.executable,str(ROOT/'generate_versions.py')],check=True)
 subprocess.run([sys.executable,str(ROOT/'generate_locales.py')],check=True)
@@ -40,3 +40,4 @@ libs=a.dependencies/'lib'
 run('link',[linker,'/NOLOGO','/DLL','/OUT:'+str(dll),'/DEBUG:FULL','/PDB:'+str(b/'DanceStudio.pdb'),'/INCREMENTAL:NO','/OPT:REF','/OPT:ICF','/NODEFAULTLIB:oldnames.lib',obj,b/'version.res',lib,libs/'spdlog.lib',libs/'fmt.lib',libs/'DirectXTK.lib',*[x+'.lib'for x in ['advapi32','bcrypt','d3d11','d3dcompiler','dbghelp','dxgi','ole32','version','kernel32','user32','gdi32','winspool','shell32','oleaut32','uuid','comdlg32','winmm']]])
 (b/'provenance.json').write_text(json.dumps({'runtime':'1.5.97 / Steam 1.6.640 / 1.6.1170; game unverified','dllSha256':hashlib.sha256(dll.read_bytes()).hexdigest(),'applicationSources':{x.name:hashlib.sha256(x.read_bytes()).hexdigest()for x in(ROOT/'runtime').iterdir()if x.suffix in ['.h','.cpp']}},indent=2))
 print('Built',dll)
+

@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "RE/N/NiSmartPointer.h"
 #include "RE/T/TESObjectREFR.h"

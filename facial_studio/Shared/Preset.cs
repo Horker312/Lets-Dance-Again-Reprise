@@ -15,6 +15,8 @@ public sealed class Preset {
  public int SchemaVersion {get;set;}=1;
  public Guid Id {get;set;}=Guid.NewGuid();
  public string Name {get;set;}="새 표정";
+ // Legacy metadata only: never selects a race or limits morph compatibility.
+ // New universal presets retain vanilla for existing schema-1 consumers.
  public string Profile {get;set;}="vanilla";
  public Dictionary<string,Channel> Channels {get;set;}=new(){["emotion"]=new(),["eyes"]=new(),["mouth"]=new()};
  public List<string> RequiredResources {get;set;}=["MFEE API v7 + compatible target-race TRI (verify in game)"];

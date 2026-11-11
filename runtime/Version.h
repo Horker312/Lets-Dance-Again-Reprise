@@ -1,2 +1,2 @@
 #pragma once
-namespace DanceStudio { inline constexpr char RuntimeVersion[]="0.6.0"; inline constexpr unsigned RuntimeVersionNumber=0x600; inline constexpr unsigned RuntimeMajor=0, RuntimeMinor=6, RuntimePatch=0; }
+namespace DanceStudio { inline constexpr char RuntimeVersion[]="0.7.1"; inline constexpr unsigned RuntimeVersionNumber=0x701; inline constexpr unsigned RuntimeMajor=0, RuntimeMinor=7, RuntimePatch=1; }

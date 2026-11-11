@@ -9,8 +9,8 @@ public static class Exporter {
   rig.EnsureSourceUnchanged();if(dance!=null){dance.EnsureSourceUnchanged();dance.ValidateRig(rig);p.Dance.Validate(dance.Duration);}if(camera!=null){FovPolicy.Value(p,camera,p.ExportIn);camera.EnsureSourceUnchanged();camera.ValidateRig(rig);CameraAnalysis.Validate(camera,rig,p.CameraBone);p.Camera.Validate(camera.Duration);if(camera.Animation.extractedMotion!=null)throw new NotSupportedException(UiText.T("t0024"));}p.Audio.Validate(audio.Duration);
   parent=System.IO.Path.GetFullPath(parent);
   string folder=System.IO.Path.Combine(parent,"DanceStudio-"+DateTime.Now.ToString("yyyyMMdd-HHmmss")+"-"+Guid.NewGuid().ToString("N")[..6]);
-  Directory.CreateDirectory(folder);bool success=false;
-  try {
+  bool success=false;
+  try {Directory.CreateDirectory(folder);
    string tracks=System.IO.Path.Combine(folder,"tracks");Directory.CreateDirectory(tracks);
    double danceFps=p.DanceOutputFps.Resolve(dance,p.Dance),cameraFps=p.CameraSampleFps.Resolve(camera,p.Camera);
    bool preserveDance=dance!=null&&p.DanceOutputFps.Mode=="Auto"&&OutputRate.Unedited(dance,p.Dance,p.ExportIn,p.ExportOut,p.MirrorPlayer);
@@ -33,7 +33,7 @@ public static class Exporter {
    var manifest=new Dictionary<string,object>{{"schemaVersion",1},{"id",p.Id},{"title",p.Title},{"duration",p.ExportOut-p.ExportIn},{"music","tracks/music.wav"},{"hashes",hashes},{"runtimeStatus","editor-export-only"}};if(File.Exists(System.IO.Path.Combine(tracks,"facial.timeline.json")))manifest["facialTimeline"]="tracks/facial.timeline.json";if(dance!=null){manifest["dance"]="tracks/dance.hkx";manifest["danceOutputFps"]=danceFps;}if(camera!=null){manifest["camera"]="tracks/camera.hkx";manifest["cameraSamples"]="tracks/camera.samples.json";manifest["cameraSampleFps"]=cameraFps;}File.WriteAllText(System.IO.Path.Combine(folder,"song.json"),JsonSerializer.Serialize(manifest,SongProject.Json));
    rig.EnsureSourceUnchanged();dance?.EnsureSourceUnchanged();camera?.EnsureSourceUnchanged();success=true;return folder;
   } finally {
-   if(!success&&Directory.Exists(folder)&&System.IO.Path.GetFullPath(folder).StartsWith(parent.TrimEnd(System.IO.Path.DirectorySeparatorChar)+System.IO.Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase))Directory.Delete(folder,true);
+   if(!success&&Directory.Exists(folder)&&System.IO.Path.GetFullPath(folder).StartsWith(parent.TrimEnd(System.IO.Path.DirectorySeparatorChar)+System.IO.Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase))FileCleanup.DeleteDirectory(folder);
   }
  }
 }

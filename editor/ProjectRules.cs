@@ -13,7 +13,7 @@ public static class ProjectRules {
   PoseEdits.Validate(p);
   if(p.Verification==null)throw new InvalidDataException(UiText.T("t0323"));p.Verification.Validate();
   foreach(var track in new[]{p.Dance,p.Camera}){if(track.HkxBindingIndex is <0)throw new InvalidDataException(UiText.T("t0324"));if(track.IdentityRigProof!=null&&(track.IdentityRigProof.Length!=64||!track.IdentityRigProof.All(Uri.IsHexDigit)))throw new InvalidDataException(UiText.T("t0325"));}
-  if(p.FovMode is not ("Manual" or "Auto"))throw new InvalidDataException(UiText.T("t0326"));
+  if(p.FovMode!="Manual")throw new InvalidDataException(UiText.T("t0326"));
   if(!double.IsFinite(p.PreviewVolume)||p.PreviewVolume<0||p.PreviewVolume>1)throw new InvalidDataException(UiText.T("t0327"));
   if(!double.IsFinite(p.PreviewAspectRatio)||p.PreviewAspectRatio<MinAspect||p.PreviewAspectRatio>MaxAspect)throw new InvalidDataException(UiText.T("t0328"));
   if(!double.IsFinite(p.CameraHeightOffset)||Math.Abs(p.CameraHeightOffset)>20000)throw new InvalidDataException(UiText.T("t0329"));

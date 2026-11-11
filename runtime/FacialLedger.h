@@ -24,7 +24,7 @@ inline Observation Classify(const Key&k,const std::optional<Value>&v,const Value
 struct Entry {Key key;Value before,last;bool conflict{};};
 // Main-thread only. No actor or face pointers. Expression is one override group.
 class Ledger {
- struct Release {Entry entry;unsigned attempts{};};
+ struct Release {Entry entry;unsigned attempts{};bool restoring{};};
  std::vector<Entry> entries;std::vector<Release> releases;
 public:
  bool Empty()const{return entries.empty()&&releases.empty();}
@@ -49,15 +49,18 @@ public:
    if(Classify(e.key,current,e.last)==Observation::Pending){if(deferPending&&!e.conflict){releases.push_back({e});log("PARTIAL PENDING; bounded restore queued",e.key,e.before,e.last,*current);}else log("PARTIAL PENDING; restore skipped",e.key,e.before,e.last,*current);continue;}
    if(!current||e.conflict||!Equal(*current,e.last)){log("PARTIAL external conflict/unavailable; restore skipped",e.key,e.before,e.last,current.value_or(Value{}));continue;}
    bool ok=write(e.key,e.before);auto after=ok?read(e.key):std::nullopt;
+   if(ok&&deferPending&&Classify(e.key,after,e.before)==Observation::Pending)releases.push_back({e,0,true});
    log(after&&Equal(*after,e.before)?"PASS numeric restore/readback; visual NOT TESTED":Classify(e.key,after,e.before)==Observation::Pending?"PARTIAL restore requested; PENDING":"FAIL restore/readback",e.key,e.before,e.last,after.value_or(Value{}));
   }
   std::erase_if(entries,[&](auto&e){return (!kind||e.key.kind==*kind)&&(!only||e.key==*only);});
  }
  // Cleanup only: at most eight observations; never overwrite an external target.
  template<class Read,class Write,class Log> void RetryReleases(Read read,Write write,Log log){
-  for(auto it=releases.begin();it!=releases.end();){auto&e=it->entry;auto current=read(e.key);auto status=Classify(e.key,current,e.last);
+  for(auto it=releases.begin();it!=releases.end();){auto&e=it->entry;auto current=read(e.key);auto status=Classify(e.key,current,it->restoring?e.before:e.last);
+   if(it->restoring){if(status==Observation::Pending&&++it->attempts<8){++it;continue;}log(status==Observation::Stable?"PASS deferred restore confirmed":status==Observation::Pending?"PARTIAL restore completion budget exhausted":"PARTIAL restore completion yielded",e.key,e.before,e.last,current.value_or(Value{}));it=releases.erase(it);continue;}
    if(!e.conflict&&status==Observation::Pending&&++it->attempts<8){++it;continue;}
    if(!e.conflict&&status==Observation::Stable){bool ok=write(e.key,e.before);auto after=ok?read(e.key):std::nullopt;
+    if(ok&&Classify(e.key,after,e.before)==Observation::Pending){it->restoring=true;it->attempts=0;++it;continue;}
     log(!ok?"FAIL deferred restore rejected":after&&Equal(*after,e.before)?"PASS deferred restore":Classify(e.key,after,e.before)==Observation::Pending?"PARTIAL deferred restore requested; PENDING":"PARTIAL external/unavailable after deferred restore",e.key,e.before,e.last,after.value_or(Value{}));
    }else log(status==Observation::Pending?"PARTIAL deferred restore budget exhausted":"PARTIAL deferred restore yielded",e.key,e.before,e.last,current.value_or(Value{}));
    it=releases.erase(it);

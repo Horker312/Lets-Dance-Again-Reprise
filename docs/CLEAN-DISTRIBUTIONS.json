@@ -1,0 +1,23 @@
+{
+  "publication": "source only; binaries not uploaded",
+  "files": [
+    {
+      "cleaned": "LDA-R-0.7.1-RC-Full-No-Songs-Clean.zip",
+      "runtimeFilesUnchanged": true,
+      "sha256": "095505e69a73e753603fad846bd5d22075b445f8533497740fdb9a7d94be7aa4",
+      "bytes": 678467
+    },
+    {
+      "cleaned": "Dance-Studio-0.6.1-RC-Clean.zip",
+      "runtimeFilesUnchanged": true,
+      "sha256": "358bb0e25fc0dcd79764fcd026e66fb842a175c500e4a7751e7c8365dafa03ff",
+      "bytes": 2552408
+    },
+    {
+      "cleaned": "Facial-Studio-0.6.0-Clean.zip",
+      "runtimeFilesUnchanged": true,
+      "sha256": "feee74bcb4f48b1e8337bdf377c49d18b296b450e214aa3ed1ebbd9dc513f48b",
+      "bytes": 823230
+    }
+  ]
+}

@@ -65,7 +65,7 @@ public sealed class MotionEdits {
  }
  Pose[] Tracks(Pose[] desired){
   var world=new Pose[rig.Names.Length];var result=new Pose[clip.Tracks];
-  for(int b=0;b<world.Length;b++){
+  foreach(int b in rig.EvaluationOrder.Length==world.Length?rig.EvaluationOrder:Enumerable.Range(0,world.Length)){
    int parent=rig.Parents[b],track=trackForBone[b];
    var local=track<0?rig.Reference[b]:parent<0?desired[b]:PoseEdits.Relative(world[parent],desired[b]);
    world[b]=parent<0?local:PoseEdits.Compose(world[parent],local);

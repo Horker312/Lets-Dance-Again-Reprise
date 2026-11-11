@@ -23,14 +23,14 @@ class SongPicker {
  using Checkbox=bool(*)(const char*,bool*);
  void(*width)(float){};Window* window{};Begin begin{};End end{};Text text{};Button button{};Combo combo{};Checkbox checkbox{};
  CameraFramingStore* framing{};std::string framingError;
- std::atomic_bool ready{},refresh{};std::atomic<std::uint64_t> cycle{};std::atomic<std::shared_ptr<const PickerList>> list;
+ std::atomic_bool ready{},refresh{},actors{};std::atomic<std::uint64_t> cycle{};std::atomic<std::shared_ptr<const PickerList>> list;
  std::atomic<std::shared_ptr<const PickerChoice>> choice;std::atomic<std::shared_ptr<const std::string>> preferred;
  std::shared_ptr<const PickerList> displayed;std::vector<std::string> labels,cameraLabels;std::vector<const char*> items,cameraItems;int selected{},selectedCamera{};std::string rememberedDance,rememberedCamera;unsigned localeRevision=~0u;
  static inline SongPicker* instance{};
  template<class T>static T Fn(HMODULE m,const char*n){return reinterpret_cast<T>(GetProcAddress(m,n));}
  static void __stdcall Draw()noexcept{if(instance)instance->Render();}
  static size_t SafeTitleEnd(const std::string&s,size_t n){while(n>0&&n<s.size()&&(static_cast<unsigned char>(s[n])&0xC0)==0x80)--n;return n;}
- bool details{},callbackLogged{},errorLogged{};
+ bool callbackLogged{},errorLogged{};
  void Render()noexcept{
   bool began=false;try{if(!callbackLogged){callbackLogged=true;SKSE::log::info("SongPicker render callback entered");}
    auto session=cycle.load();bool open=window->IsOpen.load();bool visible=begin(L10n::T("r0023"),&open,64);began=true;
@@ -46,9 +46,9 @@ class SongPicker {
     if(!displayed||displayed->loading)text(L10n::T("r0028"),nullptr);else if(!displayed->error.empty())text(displayed->error.c_str(),nullptr);else{
      if(width)width(520);if(combo(L10n::T("r0029"),&selected,items.data(),static_cast<int>(items.size()),16))rememberedDance=selected>0?displayed->dances[selected-1].id:"";if(width)width(520);if(combo(L10n::T("r0030"),&selectedCamera,cameraItems.data(),static_cast<int>(cameraItems.size()),16))rememberedCamera=selectedCamera>0?displayed->cameras[selectedCamera-1].id:"";
      if(!displayed->summary.empty())text(displayed->summary.c_str(),nullptr);
-     if(checkbox(L10n::T("qPickerDetails"),&details)){}if(details){if(selected>0){auto value=displayed->dances[selected-1].title+" / ID: "+displayed->dances[selected-1].id;text(value.c_str(),nullptr);}if(selectedCamera>0){auto value=displayed->cameras[selectedCamera-1].title+" / ID: "+displayed->cameras[selectedCamera-1].id;text(value.c_str(),nullptr);}}
+
      if(framing){auto tuning=framing->Current();bool enabled=tuning.scaleEnabled;if(checkbox(L10n::T("r0161"),&enabled)){tuning.scaleEnabled=enabled;framing->Save(tuning,framingError);}text(L10n::T("r0162"),nullptr);if(!framingError.empty())text(framingError.c_str(),nullptr);}
-     text(L10n::T("r0163"),nullptr);
+     text(L10n::T("r0163"),nullptr);if(button(L10n::T("aManage"))){actors=true;window->IsOpen=false;}
      if(selected>0||selectedCamera>0){const auto&master=selected>0?displayed->dances[selected-1]:displayed->cameras[selectedCamera-1];auto info=L10n::T("r0031")+master.title+" / "+std::to_string(master.duration)+L10n::T("r0032");text(info.c_str(),nullptr);}
      if(selected==0&&selectedCamera==0)text(L10n::T("r0033"),nullptr);
      if(button(L10n::T("r0034"))&&window->IsOpen.load()&&cycle.load()==session&&(selected>0||selectedCamera>0)&&selected>=0&&selectedCamera>=0&&selected<=static_cast<int>(displayed->dances.size())&&selectedCamera<=static_cast<int>(displayed->cameras.size())){PickerChoice result;result.generation=displayed->generation;result.cycle=session;if(selected>0){result.id=displayed->dances[selected-1].id;result.token=displayed->dances[selected-1].token;}if(selectedCamera>0)result.cameraId=displayed->cameras[selectedCamera-1].id;choice.store(std::make_shared<PickerChoice>(std::move(result)));window->IsOpen=false;}
@@ -63,6 +63,7 @@ public:
  explicit SongPicker(CameraFramingStore* store=nullptr):framing(store){}
  void Publish(std::shared_ptr<const PickerList> value){auto current=list.load();while(!current||value->generation>=current->generation){if(list.compare_exchange_weak(current,value))return;}}
  std::shared_ptr<const PickerChoice> Take(){auto value=choice.exchange(nullptr);return value&&value->cycle==cycle.load()?value:nullptr;}
+ bool TakeActors(){return actors.exchange(false);}
  bool TakeRefresh(){return refresh.exchange(false);}
  bool Open(const std::string& id={}){if(!ready.load(std::memory_order_acquire))return false;cycle.fetch_add(1);choice.store(nullptr);preferred.store(id.empty()?nullptr:std::make_shared<const std::string>(id));window->BlockUserInput=true;window->IsOpen=true;return true;}
  void Cancel(){cycle.fetch_add(1);choice.store(nullptr);preferred.store(nullptr);refresh=false;if(ready.load(std::memory_order_acquire))window->IsOpen=false;}

@@ -1,16 +1,11 @@
 using System.Numerics;
 using System.Text.Json;
 namespace FaceAssets;
-
 public static class DefaultFaceMorphs {
- public static int Apply(JsonElement morphs,IReadOnlyList<TriFace> sources,Vector3[] neutral,List<string> notes,string part){
+ public static int Apply(JsonElement morphs,IReadOnlyList<TriFace> sources,Vector3[] neutral,List<string> notes,string part,EngineFaceMappings? engine=null){
   if(morphs.ValueKind!=JsonValueKind.Object||!morphs.TryGetProperty("default",out var d)||d.ValueKind!=JsonValueKind.Object)return 0;
-  // The jslot stores the engine's 19-option/4-preset numeric arrays, not named TRI keys.
-  // Without the current race's engine FaceMorphList/FacePresetList, applying similar
-  // names would silently sculpt a different face. An explicitly confirmed exported
-  // face NIF can supply the already evaluated neutral geometry instead.
-  bool used=false;
-  foreach(string key in new[]{"morphs","presets"})if(d.TryGetProperty(key,out var values)&&values.ValueKind==JsonValueKind.Array){if(values.GetArrayLength()>64)throw new System.IO.InvalidDataException("Default morph array limit");used|=values.EnumerateArray().Any(v=>v.ValueKind==JsonValueKind.Number&&v.TryGetDouble(out var n)&&n!=0&&n!=255&&n!=uint.MaxValue&&Math.Abs(n)<1e20);}
-  if(used)notes.Add("Default face sliders/presets not reconstructed for "+part+": numeric engine/race mapping unavailable. Select a compatible RaceMenu exported face NIF for evaluated geometry.");return 0;
+  int count=0;bool missing=false;void Add(string name,double gain){if(gain==0)return;var candidates=sources.Where(t=>t.Morphs.ContainsKey(name)).Select(t=>t.Morphs[name]).ToArray();if(candidates.Length==0){notes.Add("Default TRI morph unavailable: "+part+" / "+name);missing=true;return;}var delta=candidates[0];if(delta.Length!=neutral.Length||candidates.Skip(1).Any(x=>!x.SequenceEqual(delta))){notes.Add("Default morph identity conflict: "+name);missing=true;return;}for(int i=0;i<neutral.Length;i++)neutral[i]+=new Vector3((float)delta[i].X,(float)delta[i].Y,(float)delta[i].Z)*(float)gain;count++;}
+  foreach(var property in new[]{"morphs","presets"}){if(!d.TryGetProperty(property,out var values))continue;if(values.ValueKind!=JsonValueKind.Array||values.GetArrayLength()>(property=="morphs"?19:4))throw new System.IO.InvalidDataException("Default face array shape");int index=0;foreach(var item in values.EnumerateArray()){double value=item.GetDouble();if(!double.IsFinite(value))throw new System.IO.InvalidDataException("Invalid default face value");if(property=="presets"){if(value!=Math.Truncate(value)||value<0||value>uint.MaxValue)throw new System.IO.InvalidDataException("Invalid default preset index");if(value!=255&&value!=uint.MaxValue){if(engine!=null)Add(engine.Presets[index]+value.ToString(System.Globalization.CultureInfo.InvariantCulture),1);else missing=true;}}else{/* TESNPC::FaceMorphs::kDefault is 0x7F7FFFFF (FLT_MAX), not an authored weight. */if((float)value==float.MaxValue){index++;continue;}if(Math.Abs(value)>20){notes.Add("Unsupported default slider range: "+part+" / "+index);missing=true;index++;continue;}if(value!=0){if(engine!=null){var map=engine.Options[index];if(map.Type==1){if(value<0){notes.Add("Unsupported negative single-ended default morph: "+index);missing=true;}else Add(map.Lower,value);}else Add(value<0?map.Lower:map.Upper,Math.Abs(value));}else missing=true;}}index++;}}
+  if(missing&&engine==null)notes.Add("Default face sliders/presets not reconstructed for "+part+": installed engine mapping unavailable.");if(count>0)notes.Add("Default engine-table TRI morph applications: "+part+" / "+count);return count;
  }
 }

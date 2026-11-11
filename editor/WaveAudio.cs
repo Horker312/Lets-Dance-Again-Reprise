@@ -8,24 +8,26 @@ public sealed class WaveAudio {
  public double Duration=>(double)Frames/SampleRate;
  public static WaveAudio Load(string path) {
   using var stream=File.OpenRead(path);using var r=new BinaryReader(stream);
-  if(stream.Length>512L*1024*1024)throw new InvalidDataException(UiText.T("t0338"));
+  if(stream.Length<12||stream.Length>512L*1024*1024)throw new InvalidDataException(UiText.T("t0338"));
   string Tag()=>System.Text.Encoding.ASCII.GetString(r.ReadBytes(4));
   if(Tag()!="RIFF")throw new NotSupportedException(UiText.T("t0339"));
-  r.ReadUInt32();if(Tag()!="WAVE")throw new InvalidDataException(UiText.T("t0340"));
-  ushort format=0,bits=0,channels=0,align=0;int rate=0;byte[] data=[];
+  uint riffSize=r.ReadUInt32();if(riffSize!=stream.Length-8)throw new InvalidDataException(UiText.T("t0341"));if(Tag()!="WAVE")throw new InvalidDataException(UiText.T("t0340"));
+  ushort format=0,bits=0,channels=0,align=0;int rate=0;uint bytesPerSecond=0;bool haveFormat=false,haveData=false;byte[] data=[];
   while(stream.Position+8<=stream.Length) {
    string tag=Tag();uint length=r.ReadUInt32();long end=stream.Position+length;
-   if(end>stream.Length)throw new InvalidDataException(UiText.T("t0341"));
+   if(end+(length&1)>stream.Length)throw new InvalidDataException(UiText.T("t0341"));
    if(tag=="fmt ") {
+    if(haveFormat)throw new InvalidDataException(UiText.T("t0342"));haveFormat=true;
     if(length<16)throw new InvalidDataException(UiText.T("t0342"));
-    format=r.ReadUInt16();channels=r.ReadUInt16();rate=r.ReadInt32();r.ReadUInt32();align=r.ReadUInt16();bits=r.ReadUInt16();
-    if(format==0xfffe) {if(length<40)throw new InvalidDataException(UiText.T("t0343"));stream.Position+=8;format=r.ReadUInt16();}
-   } else if(tag=="data")data=r.ReadBytes(checked((int)length));
+    format=r.ReadUInt16();channels=r.ReadUInt16();rate=r.ReadInt32();bytesPerSecond=r.ReadUInt32();align=r.ReadUInt16();bits=r.ReadUInt16();
+    if(format==0xfffe) {if(length<40)throw new InvalidDataException(UiText.T("t0343"));ushort extra=r.ReadUInt16();ushort validBits=r.ReadUInt16();r.ReadUInt32();byte[] subformat=r.ReadBytes(16);if(extra<22||18L+extra>length||validBits>bits||!subformat.AsSpan(4).SequenceEqual(new byte[]{0,0,16,0,128,0,0,170,0,56,155,113}))throw new InvalidDataException(UiText.T("t0343"));uint subtype=BitConverter.ToUInt32(subformat);if(subtype is not (1 or 3))throw new NotSupportedException(UiText.T("t0344"));format=(ushort)subtype;}
+   } else if(tag=="data"){if(haveData)throw new InvalidDataException(UiText.T("t0345"));haveData=true;data=r.ReadBytes(checked((int)length));}
    stream.Position=end+(length&1);
   }
+  if(stream.Position!=stream.Length||!haveFormat||!haveData)throw new InvalidDataException(UiText.T("t0341"));
   if(channels is <1 or >2||rate is <8000 or >192000||!((format==1&&bits is 16 or 24 or 32)||(format==3&&bits==32)))
    throw new NotSupportedException(UiText.T("t0344"));
-  if(align!=channels*(bits/8)||data.Length==0||data.Length%align!=0)throw new InvalidDataException(UiText.T("t0345"));
+  if(bytesPerSecond!=(long)rate*align||align!=channels*(bits/8)||data.Length==0||data.Length%align!=0)throw new InvalidDataException(UiText.T("t0345"));
   var result=new WaveAudio{Path=System.IO.Path.GetFullPath(path),Channels=(short)channels,SampleRate=rate};
   if(format==1&&bits==16)result.Pcm=data;
   else {

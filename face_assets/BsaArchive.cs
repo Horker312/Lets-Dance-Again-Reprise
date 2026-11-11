@@ -9,22 +9,24 @@ namespace FaceAssets;
 // Indexes names, never extracts an entire archive. No third-party decoder is bundled.
 public sealed class BsaArchive {
  public sealed record Entry(string Name,uint Size,uint Offset);
- public string Path{get;} public uint Version{get;} public uint Flags{get;}
+ public string Path{get;} public uint Version{get;} public uint Flags{get;}public uint ContentTypes{get;}
  public IReadOnlyDictionary<string,Entry> Entries=>entries;
  readonly Dictionary<string,Entry> entries=new(StringComparer.OrdinalIgnoreCase);
+ readonly CancellationToken cancellation;
  const int MaxEntry=128*1024*1024;
  public static string Normalize(string name){name=name.Replace('\\','/').TrimEnd('/');if(System.IO.Path.IsPathRooted(name)||name.Split('/').Any(p=>p is ".." or "."||p.Contains(':')||p.Contains('\0')))throw new InvalidDataException("Unsafe BSA name");return name;}
- public BsaArchive(string path){
+ public static uint ReadContentTypes(string path){using var f=File.OpenRead(path);using var r=new BinaryReader(f);if(f.Length<36||r.ReadUInt32()!=0x00415342)return 0;uint v=r.ReadUInt32();if(v is not (104 or 105))return 0;f.Position=32;return r.ReadUInt32();}
+ public BsaArchive(string path,CancellationToken token=default){cancellation=token;token.ThrowIfCancellationRequested();
   Path=System.IO.Path.GetFullPath(path);using var f=File.OpenRead(Path);using var r=new BinaryReader(f);
   if(f.Length<36||f.Length>8L*1024*1024*1024||r.ReadUInt32()!=0x00415342)throw new InvalidDataException("Invalid BSA header/size");
-  Version=r.ReadUInt32();if(Version is not (104 or 105))throw new InvalidDataException("Only BSA 104/105 supported");uint offset=r.ReadUInt32();Flags=r.ReadUInt32();uint folders=r.ReadUInt32(),files=r.ReadUInt32(),folderBytes=r.ReadUInt32(),nameBytes=r.ReadUInt32();r.ReadUInt32();
+  Version=r.ReadUInt32();if(Version is not (104 or 105))throw new InvalidDataException("Only BSA 104/105 supported");uint offset=r.ReadUInt32();Flags=r.ReadUInt32();uint folders=r.ReadUInt32(),files=r.ReadUInt32(),folderBytes=r.ReadUInt32(),nameBytes=r.ReadUInt32();ContentTypes=r.ReadUInt32();
   if((Flags&3)!=3||folders>100000||files>500000||folderBytes>16*1024*1024||nameBytes>32*1024*1024||offset<36||offset+(long)folders*(Version==105?24:16)>f.Length)throw new InvalidDataException("BSA names/count/offset budget");
   f.Position=offset;var counts=new List<int>();for(int i=0;i<folders;i++){r.ReadUInt64();uint n=r.ReadUInt32();if(n>files)throw new InvalidDataException("BSA folder count");counts.Add((int)n);if(Version==105){r.ReadUInt32();r.ReadUInt64();}else r.ReadUInt32();}
   if(counts.Sum(n=>(long)n)!=files)throw new InvalidDataException("BSA file count mismatch");var raw=new List<(string folder,uint size,uint at)>();long folderTotal=0;
-  foreach(int n in counts){int len=r.ReadByte();if(len==0)throw new InvalidDataException("Empty BSA folder name");var b=r.ReadBytes(len);if(b.Length!=len||b[^1]!=0)throw new InvalidDataException("BSA folder terminator");folderTotal+=len;string folder=Normalize(new UTF8Encoding(false,true).GetString(b[..^1]));for(int i=0;i<n;i++){r.ReadUInt64();uint size=r.ReadUInt32(),at=r.ReadUInt32();uint length=size&0x3fffffff;if((size&0x80000000)!=0||length>MaxEntry||at+(long)length>f.Length)throw new InvalidDataException("BSA entry bounds");raw.Add((folder,size,at));}}
-  if(folderTotal!=folderBytes||nameBytes>f.Length-f.Position)throw new InvalidDataException("BSA name block bounds");byte[] names=r.ReadBytes((int)nameBytes);int start=0;foreach(var item in raw){int stop=Array.IndexOf(names,(byte)0,start);if(stop<start||stop-start>1024)throw new InvalidDataException("BSA filename bounds");string name=Normalize(item.folder+"/"+new UTF8Encoding(false,true).GetString(names,start,stop-start));if(!entries.TryAdd(name,new(name,item.size,item.at)))throw new InvalidDataException("Duplicate BSA resource: "+name);start=stop+1;}if(start!=names.Length)throw new InvalidDataException("BSA trailing filename data");
+  foreach(int n in counts){cancellation.ThrowIfCancellationRequested();int len=r.ReadByte();if(len==0)throw new InvalidDataException("Empty BSA folder name");var b=r.ReadBytes(len);if(b.Length!=len||b[^1]!=0)throw new InvalidDataException("BSA folder terminator");folderTotal+=len;string folder=Normalize(new UTF8Encoding(false,true).GetString(b[..^1]));for(int i=0;i<n;i++){r.ReadUInt64();uint size=r.ReadUInt32(),at=r.ReadUInt32();uint length=size&0x3fffffff;if((size&0x80000000)!=0||length>MaxEntry||at+(long)length>f.Length)throw new InvalidDataException("BSA entry bounds");raw.Add((folder,size,at));}}
+  if(folderTotal!=folderBytes||nameBytes>f.Length-f.Position)throw new InvalidDataException("BSA name block bounds");byte[] names=r.ReadBytes((int)nameBytes);int start=0;foreach(var item in raw){cancellation.ThrowIfCancellationRequested();int stop=Array.IndexOf(names,(byte)0,start);if(stop<start||stop-start>1024)throw new InvalidDataException("BSA filename bounds");string name=Normalize(item.folder+"/"+new UTF8Encoding(false,true).GetString(names,start,stop-start));if(!entries.TryAdd(name,new(name,item.size,item.at)))throw new InvalidDataException("Duplicate BSA resource: "+name);start=stop+1;}if(start!=names.Length)throw new InvalidDataException("BSA trailing filename data");
  }
- public byte[] Read(Entry entry){
+ public byte[] Read(Entry entry){cancellation.ThrowIfCancellationRequested();
   if(!entries.TryGetValue(entry.Name,out var own)||own!=entry)throw new InvalidDataException("Foreign BSA entry");using var f=File.OpenRead(Path);f.Position=entry.Offset;int length=(int)(entry.Size&0x3fffffff);byte[] blob=new byte[length];f.ReadExactly(blob);int p=0;
   if((Flags&0x100)!=0){if(blob.Length<1||blob[0]+1>blob.Length)throw new InvalidDataException("BSA embedded name bounds");p=blob[0]+1;}
   bool compressed=((Flags&4)!=0)^((entry.Size&0x40000000)!=0);if(!compressed)return blob[p..];

@@ -27,7 +27,8 @@ class Test {
   bool operator==(const Identity&)const=default;
  };
  std::chrono::steady_clock::time_point restoreDue{};
- Ledger ledger;RE::ActorHandle target;Identity identity;RE::FormID cell{};RE::NiPoint3 position{};
+ RE::ActorHandle performanceActor;bool actorSpecified{};
+ BackendMetrics metrics;Ledger ledger;RE::ActorHandle target;Identity identity;RE::FormID cell{};RE::NiPoint3 position{};
  MFEE::InterfaceManager manager;MFEE::IFacialExpressionExtended* api{};HMODULE module{};bool apiTried{};
  std::mutex mutex;std::deque<Request> requests;std::atomic<bool> needed{};bool enabled{},draftEnabled{};
  std::string result="NOT TESTED";std::vector<std::string> morphs,morphLabels;int selectedMorph{},strength{1};
@@ -48,7 +49,7 @@ class Test {
  }
  RE::Actor* Resolve(){auto a=target.get();return a&&Identify(a.get())==identity&&!identity.parts.empty()?a.get():nullptr;}
  bool Bind(){
-  if(!ledger.Empty())return Resolve()!=nullptr;auto*a=RE::PlayerCharacter::GetSingleton();auto next=Identify(a);if(next.parts.empty())return false;
+  if(!ledger.Empty())return Resolve()!=nullptr;auto chosen=performanceActor.get();auto*a=actorSpecified?chosen.get():RE::PlayerCharacter::GetSingleton();auto next=Identify(a);if(next.parts.empty())return false;
   target=a->GetHandle();identity=std::move(next);cell=a->GetParentCell()?a->GetParentCell()->GetFormID():0;position=a->GetPosition();
   SKSE::log::info("FacialTest actor={:08X} race={:08X} face identity captured",a->GetFormID(),a->GetRace()?a->GetRace()->GetFormID():0);return true;
  }
@@ -65,12 +66,12 @@ class Test {
  };
  struct CycleValues:MFEE::IFacialExpressionExtended::IContainer {std::unordered_map<std::string,int> values;void Container(const char*,const char*n,std::int32_t v)override{if(!n||values.size()>=4096)return;auto [it,ok]=values.emplace(MfeeName(n),v);if(!ok)it->second=-1;}};
  MorphTargetBatch cycle;bool cycling{};
- std::unordered_map<std::string,int> FetchCycle(){CycleValues result;if(API())if(auto*a=Resolve())api->GetAllMorph(a,result,true);return std::move(result.values);}
+ std::unordered_map<std::string,int> FetchCycle(){CycleValues result;if(API())if(auto*a=Resolve()){++metrics.fullReads;api->GetAllMorph(a,result,true);}return std::move(result.values);}
  static bool FrameValid(RE::BSFaceGenKeyframeMultiple&f,unsigned count){return f.values&&f.count==count;}
  std::optional<Value> Read(const Key&k){
   auto*a=Resolve();if(!a)return std::nullopt;
   if(k.kind==Kind::Extended){if(!API()||!api->IsValidExpressionMorph(k.name.c_str()))return std::nullopt;
-   int value=api->GetExpressionValue(a,k.name.c_str());MorphValues destination;destination.wanted=k.name;if(cycling){cycle.Ensure([&]{return FetchCycle();});auto it=cycle.values.find(MfeeName(k.name));if(it!=cycle.values.end())destination.value=it->second;}else api->GetAllMorph(a,destination,true);
+   int value=api->GetExpressionValue(a,k.name.c_str());MorphValues destination;destination.wanted=k.name;if(cycling){cycle.Ensure([&]{return FetchCycle();});auto it=cycle.values.find(MfeeName(k.name));if(it!=cycle.values.end())destination.value=it->second;}else{++metrics.fullReads;api->GetAllMorph(a,destination,true);}
    if(!destination.value||value<0||value>100||*destination.value<0||*destination.value>100)return std::nullopt;
    return Value{static_cast<float>(value),static_cast<float>(*destination.value)};
   }
@@ -83,11 +84,11 @@ class Test {
  bool Write(const Key&k,const Value&v){
   auto*a=Resolve();if(!a)return false;
   if(k.kind==Kind::Extended){if(v.size()!=2||!Equal(Value{v[0]},Value{v[1]})||!API()||!api->IsValidExpressionMorph(k.name.c_str()))return false;
-   api->SetExpression(a,k.name.c_str(),static_cast<int>(v[0]),0);if(cycling){cycle.Written(MfeeName(k.name),static_cast<int>(v[0]));}return true;
+   api->SetExpression(a,k.name.c_str(),static_cast<int>(v[0]),0);++metrics.mfeeWrites;if(cycling){cycle.Written(MfeeName(k.name),static_cast<int>(v[0]));}return true;
   }
   auto*f=a->GetFaceGenAnimationData();if(!f)return false;RE::BSSpinLockGuard lock(f->lock);
-  if(k.kind==Kind::Expression)return MfgFrames::Expression(f->expressionKeyFrame,f->exprOverride,v);
-  auto&frame=k.kind==Kind::Modifier?f->modifierKeyFrame:f->phenomeKeyFrame;return MfgFrames::Single(frame,k.kind,k.id,v);
+  if(k.kind==Kind::Expression){bool ok=MfgFrames::Expression(f->expressionKeyFrame,f->exprOverride,v);if(ok)++metrics.mfgWrites;return ok;}
+  auto&frame=k.kind==Kind::Modifier?f->modifierKeyFrame:f->phenomeKeyFrame;bool ok=MfgFrames::Single(frame,k.kind,k.id,v);if(ok)++metrics.mfgWrites;return ok;
 
 
  }
@@ -135,6 +136,9 @@ public:
   BeginCycle();try{ledger.RetryReleases([&](auto&k){return Read(k);},[&](auto&k,auto&v){return Write(k,v);},[&](auto s,const auto&k,const auto&b,const auto&l,const auto&v){Log(s,k,b,l,v);});EndCycle();}catch(...){cycling=false;cycle.Reset();throw;}
   if(ledger.Empty()){target={};identity={};cell=0;position={};}
  return true;}catch(...){Close(false,"deferred restore exception");return false;}}
+ BackendMetrics Metrics()const{return metrics;}
+ void ResetMetrics(){metrics={};}
+ void SetPerformanceActor(RE::ActorHandle a){if(!ledger.Empty())return;performanceActor=a;actorSpecified=true;metrics={};}
  bool PerformanceValid(){return ledger.Empty()||Resolve()!=nullptr;}
  enum class ApplyResult {Applied,Pending,Yield};
  void BeginCycle(){cycling=true;cycle.Reset();}

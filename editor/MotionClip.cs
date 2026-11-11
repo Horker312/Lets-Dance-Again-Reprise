@@ -25,21 +25,17 @@ public sealed class Rig {
  public string Fingerprint=>Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(System.Text.Json.JsonSerializer.Serialize(new{Name,Names,Parents,FloatSlots,reference=Reference.Select(p=>new{t=new[]{p.T.X,p.T.Y,p.T.Z},r=new[]{p.R.X,p.R.Y,p.R.Z,p.R.W},s=new[]{p.S.X,p.S.Y,p.S.Z}})}))));
  public string? SourceReference;public string SourceHash="";
  public void EnsureSourceUnchanged(){if(SourceReference!=null&&Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(SourceBytes(SourceReference)))!=SourceHash)throw new IOException(UiText.T("t0256"));}
- public string Name="";public string[] FloatSlots=[];
+ public string Name="";public string SourceFormat="HKX";public bool SkeletonOnly;public int[] EvaluationOrder=[];public string[] FloatSlots=[];
  public string[] Names=[]; public short[] Parents=[]; public Pose[] Reference=[];
  public static Rig Load(string path) {
-  path=ResolveReference(path);if(!IsBuiltin(path)&&new FileInfo(path).Length>256L*1024*1024)throw new InvalidDataException(UiText.T("t0257"));var bytes=SourceBytes(path);using var skeletonStream=new MemoryStream(bytes,false);var f=MotionClip.ReadStream(skeletonStream);var candidates=f.Container.skeletons?.Where(x=>x.bones.Count>0&&!x.name.StartsWith("Ragdoll",StringComparison.OrdinalIgnoreCase)).ToArray()??[];if(candidates.Length!=1)throw new InvalidDataException(UiText.T("t0258"));var s=candidates[0];
-  var r=new Rig{SourceReference=path,SourceHash=Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes)),Name=s.name,FloatSlots=s.floatSlots.ToArray(),Names=s.bones.Select(b=>b.name).ToArray(),Parents=s.parentIndices.ToArray(),Reference=s.referencePose.Select(Pose.FromMatrix).ToArray()};
-  if(r.Names.Length!=r.Parents.Length||r.Names.Length!=r.Reference.Length||r.Names.Distinct().Count()!=r.Names.Length)throw new InvalidDataException(UiText.T("t0259"));
-  for(int i=0;i<r.Parents.Length;i++)if(r.Parents[i]>=i||r.Parents[i]<-1)throw new InvalidDataException(UiText.T("t0260"));
-  return r;
+  path=ResolveReference(path);if(!IsBuiltin(path)&&new FileInfo(path).Length>SkeletonImport.MaxBytes)throw new InvalidDataException(UiText.T("skeletonSize"));var bytes=SourceBytes(path);var r=SkeletonImport.Read(bytes,path);r.SourceReference=path;r.SourceHash=Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes));r.SkeletonOnly=!IsBuiltin(path);r.World(r.Reference);return r;
  }
  public Pose[] World(Pose[] local) {
-  var w=new Pose[Names.Length];
-  for(int i=0;i<w.Length;i++) {
-   var x=local[i];int parent=Parents[i];
+  var w=new Pose[Names.Length];var matrices=new Matrix4x4[Names.Length];
+  if(local.Length!=Names.Length)throw new InvalidDataException(UiText.T("skeletonInvalid"));foreach(int i in EvaluationOrder.Length==Names.Length?EvaluationOrder:Enumerable.Range(0,Names.Length)) {
+   var x=local[i];int parent=Parents[i];var matrix=Matrix4x4.CreateScale(x.S)*Matrix4x4.CreateFromQuaternion(x.R)*Matrix4x4.CreateTranslation(x.T);if(parent>=0)matrix*=matrices[parent];matrices[i]=matrix;
    if(parent>=0){var p=w[parent];x=new(p.T+Vector3.Transform(x.T*p.S,p.R),Quaternion.Normalize(p.R*x.R),p.S*x.S);}
-   w[i]=x;
+   x=x with{T=new Vector3(matrix.M41,matrix.M42,matrix.M43)};if(!float.IsFinite(x.T.X+x.T.Y+x.T.Z+x.S.X+x.S.Y+x.S.Z))throw new InvalidDataException(UiText.T("skeletonInvalid"));w[i]=x;
   }
   return w;
  }
@@ -74,7 +70,7 @@ public sealed class MotionClip {
  }
  public static MotionClip Load(string path,int? bindingIndex=null,string? identityRigProof=null) {
   using var input=File.OpenRead(path);if(input.Length>256L*1024*1024)throw new InvalidDataException(UiText.T("t0269"));using var memory=new MemoryStream();input.CopyTo(memory);byte[] snapshot=memory.ToArray();using var source=new MemoryStream(snapshot,false);var f=ReadStream(source);var selection=HkxBinding.Select(f.Container,bindingIndex);var a=f.Container.animations![selection.AnimationIndex];var b=f.Container.bindings![selection.BindingIndex];
-  if(a.duration<=0||!float.IsFinite(a.duration)||a.duration>1800||a.numberOfTransformTracks<1||a.numberOfTransformTracks>512)throw new InvalidDataException(UiText.T("t0270"));
+  if(a.duration<=0||!float.IsFinite(a.duration)||a.duration>1800||a.numberOfTransformTracks<1||a.numberOfTransformTracks>SkeletonImport.MaxBones)throw new InvalidDataException(UiText.T("t0270"));
   var result=new MotionClip{Path=System.IO.Path.GetFullPath(path),Duration=a.duration,Tracks=a.numberOfTransformTracks,Root=f.Root,Container=f.Container,Header=f.Header,sourceSnapshot=snapshot,SourceHash=Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(snapshot)),AnimationIndex=selection.AnimationIndex,BindingIndex=selection.BindingIndex,ImplicitBinding=b.transformTrackToBoneIndices.Count==0,IdentityRigProof=identityRigProof};
   if(b.transformTrackToBoneIndices.Count!=0&&b.transformTrackToBoneIndices.Count!=result.Tracks)throw new InvalidDataException(UiText.T("t0271"));
   result.BoneMap=result.ImplicitBinding?Enumerable.Range(0,result.Tracks).ToArray():b.transformTrackToBoneIndices.Select(x=>(int)x).ToArray();HkxBinding.ValidateIndices(result.BoneMap,result.Tracks);

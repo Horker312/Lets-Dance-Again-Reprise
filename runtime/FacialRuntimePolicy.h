@@ -1,8 +1,10 @@
 #pragma once
 #include <map>
+#include <cstdint>
 #include <string>
 #include <unordered_map>
 namespace DanceStudio::Facial {
+struct BackendMetrics {std::uint64_t fullReads{},mfgWrites{},mfeeWrites{};};
 inline std::string MfeeName(std::string name){for(char&c:name)if(c>='A'&&c<='Z')c=static_cast<char>(c-'A'+'a');return name;}
 class PendingBudget {
  std::map<std::string,unsigned> attempts;

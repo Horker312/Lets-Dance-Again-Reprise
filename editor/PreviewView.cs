@@ -14,7 +14,7 @@ public sealed class PreviewView:Border {
  readonly Viewport3D viewport=new();readonly Grid frame=new(){Background=Brushes.Black};double aspect=16.0/9;readonly Model3DGroup group=new();readonly Model3DGroup body=new();readonly Model3DGroup floor=new();
  readonly PerspectiveCamera viewCamera=new(){FieldOfView=48,NearPlaneDistance=.1,FarPlaneDistance=20000};
  readonly List<(int A,int B,MeshGeometry3D Mesh,double Radius)> bones=[];
- FaceScene? face;readonly Model3DGroup faceLayer=new();bool faceZoom,faceMirror;
+ FaceScene? faceSource;SkeletonVisual? skeleton;FaceScene? face;readonly Model3DGroup faceLayer=new();bool faceMirror,faceZoom;
  MeshGeometry3D? head;Rig? rig;Pose[]? world;bool orbit;Point? last;double yaw=28,pitch=12,distance=370;
  public PreviewView(bool orbit) {
   this.orbit=orbit;Background=new SolidColorBrush(Color.FromRgb(17,23,34));CornerRadius=new CornerRadius(8);Child=frame;frame.Children.Add(viewport);frame.Children.Add(cameraWarning);ClipToBounds=true;SizeChanged+=(_,_)=>FitAspect();
@@ -26,7 +26,7 @@ public sealed class PreviewView:Border {
   MouseLeftButtonDown+=(_,e)=>{if(orbit){last=e.GetPosition(this);CaptureMouse();}};
   MouseLeftButtonUp+=(_,_)=>{last=null;ReleaseMouseCapture();};
   MouseMove+=(_,e)=>{if(last is Point p){var now=e.GetPosition(this);yaw+=(now.X-p.X)*.4;pitch=Math.Clamp(pitch-(now.Y-p.Y)*.3,-65,75);last=now;Orbit();}};
-  MouseWheel+=(_,e)=>{if(orbit){distance=Math.Clamp(distance*Math.Pow(.9,e.Delta/120.0),70,2000);Orbit();}};Orbit();
+  MouseWheel+=(_,e)=>{if(orbit){distance=Math.Clamp(distance*Math.Pow(.9,e.Delta/120.0),rig?.SkeletonOnly==true?.5:70,rig?.SkeletonOnly==true?100000:2000);Orbit();}};Orbit();
  }
  public void SetCameraValid(bool valid){if(orbit)return;viewport.Visibility=valid?Visibility.Visible:Visibility.Hidden;cameraWarning.Visibility=valid?Visibility.Collapsed:Visibility.Visible;}
  public void SetStageYaw(double degrees){floor.Transform=new RotateTransform3D(new AxisAngleRotation3D(new Vector3D(0,1,0),degrees));}
@@ -47,25 +47,32 @@ public sealed class PreviewView:Border {
   if(mesh.TriangleIndices.Count==0){var ids=new Int32Collection();for(int i=0;i<8;i++){int j=(i+1)%8;foreach(var n in new[]{i,j,8+i,j,8+j,8+i})ids.Add(n);}mesh.TriangleIndices=ids;}
  }
  public void SetRig(Rig r) {
-  rig=r;body.Children.Clear();bones.Clear();
+  rig=r;world=null;skeleton=null;head=null;body.Children.Clear();bones.Clear();SelectFace();if(r.SkeletonOnly){skeleton=new(r);body.Children.Add(skeleton.Model);var reference=r.World(r.Reference);var min=reference.Select(p=>p.T).Aggregate(V.Min);var max=reference.Select(p=>p.T).Aggregate(V.Max);distance=Math.Max(2,(max-min).Length()*1.5);Update(reference);return;}distance=370;
   string[] names=["NPC Pelvis [Pelv]","NPC Spine [Spn0]","NPC Spine1 [Spn1]","NPC Spine2 [Spn2]","NPC Neck [Neck]","NPC Head [Head]",
    "NPC L Clavicle [LClv]","NPC R Clavicle [RClv]","NPC L UpperArm [LUar]","NPC R UpperArm [RUar]","NPC L Forearm [LLar]","NPC R Forearm [RLar]","NPC L Hand [LHnd]","NPC R Hand [RHnd]",
    "NPC L Thigh [LThg]","NPC R Thigh [RThg]","NPC L Calf [LClf]","NPC R Calf [RClf]","NPC L Foot [Lft ]","NPC R Foot [Rft ]","NPC L Toe0 [LToe]","NPC R Toe0 [RToe]"];
   foreach(var name in names){int b=Array.IndexOf(r.Names,name);if(b<0||r.Parents[b]<0)continue;int a=r.Parents[b];double radius=name.Contains("Thigh")?5:name.Contains("Calf")?3.5:name.Contains("Spine")?8:name.Contains("UpperArm")?3:name.Contains("Forearm")?2.3:2;var mesh=new MeshGeometry3D();var material=Mat(name.Contains(" L ")?Color.FromRgb(101,200,221):name.Contains(" R ")?Color.FromRgb(164,149,238):Color.FromRgb(175,188,211));body.Children.Add(new GeometryModel3D(mesh,material){BackMaterial=material});bones.Add((a,b,mesh,radius));}
   head=new MeshGeometry3D();var hm=Mat(Color.FromRgb(211,200,191));body.Children.Add(new GeometryModel3D(head,hm){BackMaterial=hm});Update(r.World(r.Reference));
  }
- public void Clear(){body.Children.Clear();bones.Clear();rig=null;world=null;head=null;faceLayer.Children.Clear();}
+ public void Clear(){body.Children.Clear();bones.Clear();rig=null;world=null;head=null;skeleton=null;faceLayer.Children.Clear();}
  public void Update(Pose[] w) {
-  world=w;foreach(var b in bones)SetTube(b.Mesh,w[b.A].T,w[b.B].T,b.Radius);
+  world=w;skeleton?.Update(w);foreach(var b in bones)SetTube(b.Mesh,w[b.A].T,w[b.B].T,b.Radius);
   if(rig!=null&&head!=null){int h=Array.IndexOf(rig.Names,"NPC Head [Head]");if(h>=0&&face==null)SetTube(head,w[h].T,w[h].T+V.Transform(new V(0,0,13),w[h].R),6);}
   UpdateFacePose();if(orbit)Orbit();
  }
- public void SetFace(FaceScene? scene){face=scene?.HasHeadBind==true?scene:null;faceLayer.Children.Clear();if(face!=null)faceLayer.Children.Add(face.CreateVisual());if(world!=null)Update(world);}
- public void SetFaceOptions(bool mirror,bool zoom){faceMirror=mirror;faceZoom=zoom&&face!=null;if(orbit){if(faceZoom)group.Children.Remove(body);else if(!group.Children.Contains(body))group.Children.Insert(Math.Min(3,group.Children.Count),body);}UpdateFacePose();if(orbit)Orbit();}
- void UpdateFacePose(){if(face==null||rig==null||world==null)return;int h=Array.IndexOf(rig.Names,"NPC Head [Head]");if(h<0)return;if(faceLayer.Children.Count==0)faceLayer.Children.Add(face.CreateVisual());if(head!=null)head.Positions=new Point3DCollection();var pose=world[h];var m=Matrix4x4.CreateScale(pose.S*(faceMirror?new V(-1,1,1):V.One))*Matrix4x4.CreateFromQuaternion(pose.R)*Matrix4x4.CreateTranslation(pose.T);var c=new Matrix4x4(1,0,0,0,0,0,-1,0,0,1,0,0,0,0,0,1);Matrix4x4.Invert(c,out var inverse);m=inverse*m*c;faceLayer.Transform=new MatrixTransform3D(new Matrix3D(m.M11,m.M12,m.M13,m.M14,m.M21,m.M22,m.M23,m.M24,m.M31,m.M32,m.M33,m.M34,m.M41,m.M42,m.M43,m.M44));}
+ public string Mode=>face!=null?UiText.T(rig?.SkeletonOnly==true?"skeletonModeHybrid":"skeletonModeFace"):rig?.SkeletonOnly==true?UiText.T("skeletonModeBones"):UiText.T("skeletonModeDefault");
+ readonly List<(FacePart Part,MeshGeometry3D Mesh,Matrix4x4 Inverse,(int Bone,Matrix4x4 Bind,(int Index,float Weight)[] Weights)[] Bones)> skinned=[];
+ int faceHead=-1;public string FaceIssue{get;private set;}="";
+ void SelectFace(){face=null;faceHead=-1;FaceIssue="";faceLayer.Children.Clear();skinned.Clear();if(faceSource==null||rig==null)return;int h=Array.IndexOf(rig.Names,"NPC Head [Head]");if(h<0){FaceIssue=UiText.T("faceNoHead");return;}if(!faceSource.HasHeadBind){FaceIssue=UiText.T("faceNoBind");return;}if(rig.SkeletonOnly){foreach(var part in faceSource.Parts){if(!part.RigidHeadCompatible&&part.SkinBindings.Count==0){FaceIssue=UiText.T("faceNoBind");return;}foreach(var binding in part.SkinBindings)if(Array.IndexOf(rig.Names,binding.Name)<0){FaceIssue=UiText.T("faceMissingBone")+binding.Name;return;}if(part.SkinBindings.Count>0){var sums=new float[part.Reference.Length];foreach(var binding in part.SkinBindings)foreach(var weight in binding.Weights){if(weight.Index<0||weight.Index>=sums.Length||!float.IsFinite(weight.Weight)||weight.Weight<0||weight.Weight>1){FaceIssue=UiText.T("faceNoBind");return;}sums[weight.Index]+=weight.Weight;}if(sums.Any(v=>Math.Abs(v-1)>.02)){FaceIssue=UiText.T("faceNoBind");return;}}var m=part.ToHead;var values=new[]{m.M11,m.M12,m.M13,m.M21,m.M22,m.M23,m.M31,m.M32,m.M33,m.M41,m.M42,m.M43};if(values.Any(v=>!float.IsFinite(v))||!Matrix4x4.Invert(m,out _)){FaceIssue=UiText.T("faceNoBind");return;}}for(int i=h;i>=0;i=rig.Parents[i]){var scale=rig.Reference[i].S;if(Math.Abs(scale.X-scale.Y)>.0001||Math.Abs(scale.Y-scale.Z)>.0001){FaceIssue=UiText.T("faceNonuniform");return;}}}faceHead=h;face=faceSource;faceLayer.Transform=Transform3D.Identity;if(rig.SkeletonOnly){foreach(var part in face.Parts.Where(p=>!p.Hidden&&(face.ShowHair||p.HeadPartType!=3))){Matrix4x4.Invert(part.ToHead,out var inv);var mesh=part.Mesh.Clone();var material=part.Material;faceLayer.Children.Add(new GeometryModel3D(mesh,material){BackMaterial=material});var mapped=part.SkinBindings.Select(b=>(Array.IndexOf(rig.Names,b.Name),b.Bind,b.Weights)).ToArray();if(mapped.Length==0)mapped=[(h,part.ToHead,Enumerable.Range(0,part.Reference.Length).Select(i=>(i,1f)).ToArray())];skinned.Add((part,mesh,inv,mapped));}}else faceLayer.Children.Add(face.CreateVisual());}
+ public void SetFace(FaceScene? scene){faceSource=scene;SelectFace();if(world!=null)Update(world);}
+ public void SetFaceMirror(bool mirror)=>SetFaceOptions(mirror,faceZoom);
+ public void SetFaceOptions(bool mirror,bool zoom){faceMirror=mirror;faceZoom=zoom;UpdateFacePose();if(orbit)Orbit();}
+ void UpdateFacePose(){if(face==null||rig==null||world==null)return;int h=faceHead;if(h<0||h>=world.Length)return;if(skinned.Count>0){faceLayer.Transform=Transform3D.Identity;foreach(var item in skinned){var output=new V[item.Part.Reference.Length];foreach(var bone in item.Bones){if(bone.Bone>=world.Length)return;var p=world[bone.Bone];var matrix=item.Inverse*bone.Bind*Matrix4x4.CreateScale(p.S)*Matrix4x4.CreateFromQuaternion(p.R)*Matrix4x4.CreateTranslation(p.T);foreach(var weight in bone.Weights){var source=FaceScene.Vector(item.Part.Mesh.Positions[weight.Index]);output[weight.Index]+=V.Transform(source,matrix)*weight.Weight;}}if(output.Any(v=>!FaceScene.Finite(v)))return;item.Mesh.Positions=new Point3DCollection(output.Select(P));item.Mesh.Normals=new Vector3DCollection();}return;}if(faceLayer.Children.Count==0)faceLayer.Children.Add(face.CreateVisual());if(head!=null)head.Positions=new Point3DCollection();var pose=world[h];var m=Matrix4x4.CreateScale(pose.S*(faceMirror?new V(-1,1,1):V.One))*Matrix4x4.CreateFromQuaternion(pose.R)*Matrix4x4.CreateTranslation(pose.T);var c=new Matrix4x4(1,0,0,0,0,0,-1,0,0,1,0,0,0,0,0,1);Matrix4x4.Invert(c,out var inverse);m=inverse*m*c;faceLayer.Transform=new MatrixTransform3D(new Matrix3D(m.M11,m.M12,m.M13,m.M14,m.M21,m.M22,m.M23,m.M24,m.M31,m.M32,m.M33,m.M34,m.M41,m.M42,m.M43,m.M44));}
  void Orbit() {
-  if(!orbit)return;var target=new V(0,0,85);if(rig!=null&&world!=null){int com=Array.IndexOf(rig.Names,"NPC Pelvis [Pelv]");if(com>=0)target=new(world[com].T.X,world[com].T.Y,85);}
-  double viewingDistance=distance;if(faceZoom&&face!=null&&rig!=null&&world!=null){int h=Array.IndexOf(rig.Names,"NPC Head [Head]");if(h>=0){var bounds=faceLayer.Bounds;target=FaceScene.Vector(new Point3D(bounds.X+bounds.SizeX/2,bounds.Y+bounds.SizeY/2,bounds.Z+bounds.SizeZ/2));viewingDistance=Math.Clamp(distance/6,8,150);}}viewCamera.FieldOfView=faceZoom?36:48;
+  if(!orbit)return;var target=new V(0,0,85);if(rig?.SkeletonOnly==true&&world!=null){var min=world.Select(p=>p.T).Aggregate(V.Min);var max=world.Select(p=>p.T).Aggregate(V.Max);target=(min+max)/2;}else if(rig!=null&&world!=null){int com=Array.IndexOf(rig.Names,"NPC Pelvis [Pelv]");if(com>=0)target=new(world[com].T.X,world[com].T.Y,85);}
+  double viewingDistance=distance;bool zoom=faceZoom&&face!=null&&rig!=null&&world!=null&&Array.IndexOf(rig.Names,"NPC Head [Head]")>=0&&!faceLayer.Bounds.IsEmpty;
+  if(zoom){var bounds=faceLayer.Bounds;var center=new Point3D(bounds.X+bounds.SizeX/2,bounds.Y+bounds.SizeY/2,bounds.Z+bounds.SizeZ/2);if(double.IsFinite(center.X)&&double.IsFinite(center.Y)&&double.IsFinite(center.Z)){target=FaceScene.Vector(center);viewingDistance=Math.Clamp(distance/6,8,150);}else zoom=false;}
+  if(zoom)group.Children.Remove(body);else if(!group.Children.Contains(body))group.Children.Insert(Math.Min(3,group.Children.Count),body);viewCamera.FieldOfView=zoom?36:48;
   double y=yaw*Math.PI/180,p=pitch*Math.PI/180;var pos=target+new V((float)(viewingDistance*Math.Sin(y)*Math.Cos(p)),(float)(viewingDistance*Math.Cos(y)*Math.Cos(p)),(float)(viewingDistance*Math.Sin(p)));
   viewCamera.Position=P(pos);viewCamera.LookDirection=D(target-pos);viewCamera.UpDirection=new(0,1,0);
  }

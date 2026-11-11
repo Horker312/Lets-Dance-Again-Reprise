@@ -6,7 +6,6 @@ public static class ClipInterpolation {
  public static bool Expression(Morph m)=>m.Backend=="MFG"&&m.Id.StartsWith("expression:",StringComparison.Ordinal);
  static Morph Copy(Morph m,double value)=>new(){Backend=m.Backend,Id=m.Id,Name=m.Name,Enabled=true,Strength=value};
  public static Preset Blend(Preset a,Preset b,double alpha){
-  if(a.Profile!=b.Profile)throw new InvalidDataException("프리셋과 클립의 종족 프로필이 다릅니다.");
   alpha=Math.Clamp(alpha,0,1);var result=new Preset{Profile=a.Profile,Name=a.Name,Channels=new(),RequiredResources=a.RequiredResources.Concat(b.RequiredResources).Distinct().ToList()};
   foreach(var name in a.Channels.Keys.Union(b.Channels.Keys)){
    a.Channels.TryGetValue(name,out var ac);b.Channels.TryGetValue(name,out var bc);

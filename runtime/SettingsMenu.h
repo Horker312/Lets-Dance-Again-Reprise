@@ -66,8 +66,8 @@ class SettingsMenu {
             if(!callbackLogged){callbackLogged=true;SKSE::log::info("SettingsMenu callback entered");}
             std::scoped_lock lock(mutex);
             Line((std::string(ProductName)+" "+RuntimeVersion).c_str());
-            int selectedLanguage=static_cast<int>(L10n::language.load());const char*languages[]={"한국어","English"};
-            if(combo("한국어 / English##DanceStudioLanguage",&selectedLanguage,languages,2,2)){std::string error;if(L10n::Save(selectedLanguage,error)){Choices();status=L10n::T("r0017");}else status=error;}
+            int selectedLanguage=static_cast<int>(L10n::language.load());const auto&languages=L10n::LanguageItems();
+            if(combo("Language / 언어##DanceStudioLanguage",&selectedLanguage,languages.data(),static_cast<int>(languages.size()),8)){std::string error;if(L10n::Save(selectedLanguage,error)){Choices();status=L10n::T("r0017");}else status=error;}
 
             Line(L10n::T("r0002"));
             Line(L10n::T("r0003"));
@@ -79,7 +79,8 @@ class SettingsMenu {
             Line(L10n::T("r0008"));
             Line(L10n::T("r0009"));}
             Select(L10n::T("r0010"),draft.start);
-            Select(L10n::T("r0011"),draft.stop);
+            // Legacy stop bindings remain readable; play toggles stop in the public UI.
+            draft.stop=0;
             Select(L10n::T("r0012"),draft.hud);
             Line(L10n::T("r0013"));
             if(hasPhoto&&hasPhoto()){Select(L10n::T("r0014"),draft.photo);Line(L10n::T("r0015"));}
@@ -98,6 +99,7 @@ class SettingsMenu {
     }
 public:
     SettingsMenu(Store& s,bool(*isIdle)(),bool(*photoAvailable)()=nullptr,CameraFramingStore* cameraFraming=nullptr,bool(*diagnostics)()=nullptr) : store(s),idle(isIdle),hasPhoto(photoAvailable),hasDiagnostics(diagnostics),framing(cameraFraming) {}
+    void CloseMainForWorld(){if(ready.load(std::memory_order_acquire))if(auto*main=window())main->IsOpen=false;}
     bool Open() const {
         if (!ready.load(std::memory_order_acquire)) return false;
         auto* main=window();

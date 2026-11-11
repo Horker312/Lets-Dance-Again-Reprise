@@ -6,7 +6,7 @@ public static class SelfTests {
  public static void Run(string output) {
   Directory.CreateDirectory(output);output=Path.GetFullPath(output);int checks=0;
   void Check(bool ok,string text){checks++;if(!ok)throw new Exception(text);}
-  string mods=@"C:\Modding\MO2\mods\Lets Dance Again K Girl Edtion";
+  string mods=Environment.GetEnvironmentVariable("LDA_TEST_SOURCE_ROOT") ?? throw new InvalidOperationException("Set LDA_TEST_SOURCE_ROOT to your licensed LDA test fixture.");
   string folder=Path.Combine(mods,@"Meshes\actors\character\animations\Lets_dance_again");
   string dancePath=Path.Combine(folder,"Booo.hkx"),camPath=Path.Combine(folder,"c61.hkx"),audioPath=Path.Combine(mods,@"sound\fx\LDA\Booo.wav");
   string[] inputs=[dancePath,camPath,audioPath,MainWindow.DefaultSkeleton];

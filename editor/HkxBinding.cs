@@ -34,6 +34,8 @@ public static class HkxBinding {
   var binding=clip.Container.bindings[clip.BindingIndex];
   if(Convert.ToInt32(binding.blendHint)!=0)throw new NotSupportedException(UiText.T("t0043"));
   var source=clip.Container.skeletons?.FirstOrDefault(x=>x.name==binding.originalSkeletonName);
+  bool named=clip.Animation.annotationTracks.Count==clip.Tracks&&Enumerable.Range(0,clip.Tracks).All(i=>clip.Animation.annotationTracks[i].trackName==rig.Names[clip.BoneMap[i]]);
+  if(source==null&&rig.SourceFormat=="NIF"&&!named)throw new HkxMappingRequired(UiText.T("skeletonNifOrder"));
   if(source==null&&!string.IsNullOrEmpty(binding.originalSkeletonName)&&binding.originalSkeletonName!=rig.Name&&!string.Equals(clip.IdentityRigProof,clip.MappingProofFor(rig),StringComparison.OrdinalIgnoreCase))throw new HkxMappingRequired(UiText.T("t0044"));
   if(source!=null){foreach(int b in clip.BoneMap)if(b>=source.bones.Count||b>=source.parentIndices.Count||source.bones[b].name!=rig.Names[b]||source.parentIndices[b]!=rig.Parents[b])throw new InvalidDataException(UiText.T("t0045"));}
   if(clip.ImplicitBinding){
@@ -43,5 +45,6 @@ public static class HkxBinding {
   }
  }
 }
+
 
 

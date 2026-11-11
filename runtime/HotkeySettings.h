@@ -10,7 +10,7 @@
 #include <vector>
 
 namespace DanceStudio::Hotkeys {
-struct Bindings { unsigned start{68}, stop{66},hud{87},photo{0},pause{57}; bool operator==(const Bindings&) const = default; };
+struct Bindings { unsigned start{68}, stop{0},hud{87},photo{0},pause{57}; bool operator==(const Bindings&) const = default; };
 constexpr std::uint64_t Pack(Bindings k) { return (std::uint64_t(k.start) << 8) | (std::uint64_t(k.stop) << 16) | (std::uint64_t(k.hud)<<24) | (std::uint64_t(k.photo)<<40) | (std::uint64_t(k.pause)<<48); }
 constexpr Bindings Unpack(std::uint64_t k) { return {unsigned((k >> 8) & 255), unsigned((k >> 16) & 255),unsigned((k>>24)&255),unsigned((k>>40)&255),unsigned((k>>48)&255)}; }
 inline bool Allowed(unsigned k, unsigned menu) {
@@ -26,7 +26,7 @@ inline bool Allowed(unsigned k, unsigned menu) {
 }
 inline std::string Validate(Bindings k, unsigned menu) {
     if(k.pause!=57)return L10n::T("r0037");
-    if (!k.stop) return L10n::T("r0038");
+    // Stop is optional: the play key already stops an active performance.
     std::array<unsigned,5> keys{k.start,k.stop,k.hud,k.photo,k.pause};
     for(size_t i=0;i<keys.size();++i){if(!Allowed(keys[i],menu))return L10n::T("r0039");for(size_t j=0;j<i;++j)if(keys[i]&&keys[i]==keys[j])return L10n::T("r0040");}
     return {};

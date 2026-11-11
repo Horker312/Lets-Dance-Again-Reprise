@@ -1,6 +1,9 @@
 using System.Windows;using System.Windows.Input;using System.Windows.Media;using System.Windows.Documents;
 namespace DanceStudio;
 public static class TimelineInput {
+ // Canvas includes a label gutter to the left of the tick grid. That gutter is NOT a horizontal scrolling target.
+ public static bool WheelInTimeGrid(double x,double width)=>TimelineWheelRegion.Contains(x,width,TimelineAxis.Left,TimelineAxis.Right);
+
  public static void AutoScrub(FrameworkElement surface,Func<bool> active,Action<Point> move){var timer=new System.Windows.Threading.DispatcherTimer{Interval=TimeSpan.FromMilliseconds(33)};timer.Tick+=(_,_)=>{if(!active()||!surface.IsMouseCaptured){timer.Stop();return;}var p=Mouse.GetPosition(surface);if(p.X<TimelineAxis.Left||p.X>surface.ActualWidth-TimelineAxis.Right)move(p);};surface.PreviewMouseLeftButtonDown+=(_,_)=>surface.Dispatcher.BeginInvoke(()=>{if(active())timer.Start();});surface.LostMouseCapture+=(_,_)=>timer.Stop();surface.Unloaded+=(_,_)=>timer.Stop();}
  public static bool Editing(DependencyObject? o){for(;o!=null;o=o is Visual?VisualTreeHelper.GetParent(o):(o as FrameworkContentElement)?.Parent)if(o is System.Windows.Controls.TextBox or System.Windows.Controls.ComboBox or System.Windows.Controls.ListBox or System.Windows.Controls.Primitives.ButtonBase)return true;return false;}
  public static void Marquee(FrameworkElement surface,Func<Point,bool> blank,Action<Rect> select){Point origin=new();Box? box=null;AdornerLayer? layer=null;void End(bool commit){if(box==null)return;var rect=box.Rect;layer?.Remove(box);box=null;if(surface.IsMouseCaptured)surface.ReleaseMouseCapture();if(commit)select(rect);}
