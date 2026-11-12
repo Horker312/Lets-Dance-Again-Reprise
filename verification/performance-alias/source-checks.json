@@ -1,0 +1,16 @@
+{
+  "prepare_confirmation_no_unconditional_start": true,
+  "no_restage_to_start_reservation": true,
+  "play_during_restage_is_explicit": true,
+  "cancel_clears_start_reservation": true,
+  "reservation_consumed_after_prepare": true,
+  "orphan_not_global_acquire_gate": true,
+  "missing_actor_is_unresolved": true,
+  "deleted_actor_is_invalid": true,
+  "package_diagnostic_no_control_rejection": true,
+  "no_papyrus_or_old_interrupt": true,
+  "PerformanceActors.h_unchanged": true,
+  "SessionCore.h_unchanged": true,
+  "SessionInputPolicy.h_unchanged": true,
+  "esl_unchanged": true
+}

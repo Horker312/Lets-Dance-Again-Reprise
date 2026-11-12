@@ -25,3 +25,16 @@ python tools/build_native.py --dependencies <의존성-prefix> --json-include <j
 SDK와 플러그인은 ENABLE_SKYRIM_SE=1 / ENABLE_SKYRIM_AE=1 / HAS_SKYRIM_MULTI_TARGETING=1, VR 비활성 조건으로 맞춥니다. 이미 빌드한 정확히 일치하는 CommonLib 라이브러리는 --commonlib-library로 지정할 수 있습니다. 새 후킹 주소를 추정하지 않습니다.
 
 실제 배포 후보는 로컬 빌드에서 검증했습니다. 공개 폴더 구조로의 소스 배치와 프로젝트 참조는 확인하지만, 외부 의존성을 모두 새로 설치한 독립 재현 빌드를 검증 완료로 보고하지 않습니다. SDK/게임/외부 자산 라이선스는 THIRD_PARTY.md를 함께 확인하세요.
+
+## LDA:R 0.7.7 공연 제어 데이터와 최소 검사
+
+완성 데이터는 `data/DanceStudioData.esl`입니다. DLL과 해당 ESL을 함께 사용합니다. 기본 3개 레코드를 유지한 새 Quest/Alias/PACK/CELL/5개 XMarker가 포함됩니다.
+
+```powershell
+dotnet run --project tools/alias-control/DataBuilder -- <Skyrim.esm 경로> data/base/DanceStudioData.esl tools/alias-control/generated/DanceStudioData.esl
+python tools/alias-control/merge_data.py --base data/base/DanceStudioData.esl --generated tools/alias-control/generated/DanceStudioData.esl --output data/DanceStudioData.esl --report tools/alias-control/data-validation.json
+dotnet run --project tools/alias-control/DataBuilder -- data/DanceStudioData.esl
+python verification/performance-alias/run.py --json-include <json-header-root>
+```
+
+데이터 빌더는 .NET 10 및 Mutagen NuGet 복원이 필요합니다. 모의 검사 104개는 실제 엔진·AI 반환 검증을 대체하지 않습니다. 로컬 배포 레이아웃에서의 Release 빌드 및 모의 검사 결과이며, 공개 경로로 재배치한 뒤의 전체 독립 빌드는 미검증입니다.

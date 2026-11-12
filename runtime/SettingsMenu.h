@@ -79,8 +79,7 @@ class SettingsMenu {
             Line(L10n::T("r0008"));
             Line(L10n::T("r0009"));}
             Select(L10n::T("r0010"),draft.start);
-            // Legacy stop bindings remain readable; play toggles stop in the public UI.
-            draft.stop=0;
+            Select(L10n::T("stopBinding"),draft.stop);
             Select(L10n::T("r0012"),draft.hud);
             Line(L10n::T("r0013"));
             if(hasPhoto&&hasPhoto()){Select(L10n::T("r0014"),draft.photo);Line(L10n::T("r0015"));}

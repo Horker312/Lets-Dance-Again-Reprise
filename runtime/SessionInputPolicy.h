@@ -2,6 +2,7 @@
 #include "SessionCore.h"
 #include <mutex>
 namespace DanceStudio {
+inline bool PreparationCancelOnEscape(SessionState state,bool waitingBegin){return waitingBegin||state==SessionState::Preparing||state==SessionState::Armed;}
 inline SessionState SpaceState(SessionState state,bool actorInteraction){return actorInteraction?SessionState::Idle:state;}
 inline unsigned PlayCommandFor(SessionState state){switch(state){case SessionState::Idle:return 2;case SessionState::Preparing:return 8;case SessionState::Armed:return 16;case SessionState::Playing:return 4;default:return 0;}}
 class SpaceGate {
