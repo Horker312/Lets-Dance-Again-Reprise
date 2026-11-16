@@ -31,6 +31,7 @@
 #include "PlaybackLoadDiagnostics.h"
 #include "RecoveryPolicy.h"
 #include "HUDGate.h"
+#include "HUDMessage.h"
 #include "NativePlaybackControl.h"
 #include "ScopedCategoryMute.h"
 #include "InteractiveCamera.h"
@@ -131,7 +132,7 @@ std::atomic<std::uint64_t> observedEpoch{};std::atomic<unsigned> generated{};std
 struct ClipSaved {std::uint64_t epoch{};RE::hkaAnimationBinding* binding{};decltype(RE::hkbClipGenerator::mode) mode;float speed{},fraction{};bool nativeStarted{};float local{},time{},controlTime{};decltype(RE::hkbClipGenerator::animationControl) control{};};
 std::atomic<unsigned> clipCount{};std::mutex clipsLock;std::unordered_map<RE::hkbClipGenerator*,ClipSaved> clips;
 double Now(){return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();}
-void Notify(std::string text){SKSE::log::info("{}",text);RE::SendHUDMessage::ShowHUDMessage((std::string(ProductName)+": "+text).c_str());}
+void Notify(std::string text){SKSE::log::info("{}",text);RE::SendHUDMessage::ShowHUDMessage(HudNotification(text).c_str());}
 std::uint32_t ExternalPauseReasons(){auto*ui=RE::UI::GetSingleton();bool frozen=PhotoMode::Frozen();engineFrozen=frozen;return PauseMask({userPaused.load(),frozen,!ui||ui->GameIsPaused(),menuSuspended.load(),settings.Open(),!Focused(),true,true});}
 void ApplyPlaybackPause(bool allowResume){auto reasons=ExternalPauseReasons()|(!graphPlayable.load()?PauseGraph:0)|(!running.load()?PauseNoSession:0);pauseReasons=reasons;audio.SyncPause(pauseReasons,allowResume);if(running.load()&&loggedPauseReasons!=reasons){loggedPauseReasons=reasons;SKSE::log::info("Playback pause reasons={} user={} engineFreeze={} timeline={}",reasons,userPaused.load(),engineFrozen.load(),core.Seconds());}}
 // Stop-only fast path: animation callbacks can observe Photo Mode's direct
