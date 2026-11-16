@@ -1,4 +1,5 @@
 #include "SessionCore.h"
+#include "HUDMessage.h"
 #include <cassert>
 #include <array>
 #include <algorithm>
@@ -8,6 +9,9 @@ using namespace DanceStudio;
 int main() {
  unsigned checks=0;
  auto check=[&](bool b){++checks;assert(b);};
+ check(HudNotification("")=="LDA:R");
+ check(HudNotification("재생 중 — 예제곡")=="LDA:R · 재생 중 — 예제곡");
+ check(HudNotification("배치 취소 — 대상이 변경되었습니다.")=="LDA:R · 배치 취소 — 대상이 변경되었습니다.");
  std::array<ReadyPart,5> parts{ReadyPart::PlayerGraph,ReadyPart::CameraActor3D,ReadyPart::CameraTrack,ReadyPart::AudioBuffered,ReadyPart::WorldValid};
  std::array<int,5> order{0,1,2,3,4};
  do {
