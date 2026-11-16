@@ -77,8 +77,13 @@ public sealed class SongProject {
   var json=JsonSerializer.Serialize(copy,Json);if(System.Text.Encoding.UTF8.GetByteCount(json)>32*1024*1024)throw new InvalidDataException("프로젝트가 너무 큽니다.");AtomicWrite(path,json);
  }
  public static SongProject Load(string path) {
-  if(new FileInfo(path).Length>32*1024*1024)throw new InvalidDataException(UiText.T("t0249"));
-  var text=File.ReadAllText(path);var p=JsonSerializer.Deserialize<SongProject>(text,Json)??throw new InvalidDataException(UiText.T("t0250"));
+  // Validate and read via the same handle to avoid an unchecked second open.
+  using var file=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read);
+  if(file.Length>32L*1024*1024)throw new InvalidDataException(UiText.T("t0249"));
+  using var reader=new StreamReader(file);
+  var text=reader.ReadToEnd();
+  if(System.Text.Encoding.UTF8.GetByteCount(text)>32*1024*1024)throw new InvalidDataException(UiText.T("t0249"));
+  var p=JsonSerializer.Deserialize<SongProject>(text,Json)??throw new InvalidDataException(UiText.T("t0250"));
   if(p.SchemaVersion!=5)throw new InvalidDataException(UiText.T("t0251"));
   using var raw=JsonDocument.Parse(text);FacialPresets.JsonShape.ProjectFacials(raw.RootElement);bool Has(string n)=>raw.RootElement.EnumerateObject().Any(x=>x.Name.Equals(n,StringComparison.OrdinalIgnoreCase));if(!Has("CameraBoneManual"))p.CameraBoneManual=p.CameraBone>=0;if(!Has("CameraForwardManual"))p.CameraForwardManual=Has("CameraForward");
   if(p.SchemaVersion<4)p.FovMode="Manual";
@@ -93,6 +98,6 @@ public sealed class SongProject {
  }
  public static void AtomicWrite(string path,string content) {
   var temp=path+".tmp-"+Guid.NewGuid().ToString("N");
-  try{File.WriteAllText(temp,content);File.Move(temp,path,true);}finally{if(File.Exists(temp))File.Delete(temp);}
+  try{File.WriteAllText(temp,content);File.Move(temp,path,true);}finally{FileCleanup.DeleteFile(temp);}
  }
 }
