@@ -13,6 +13,7 @@ public static class Program {
    if(args.Length>0&&args[0]=="--layout-test"){LayoutTests.Run(args[1]);return;}
    if(args.Length>0&&args[0]=="--lifetime-test"){LifetimeTests.Run(args.Skip(1).ToArray());return;}
    if(args.Length>0&&args[0]=="--localization-test"){LocalizationTests.Run(args[1]);return;}
+   if(args.Length>0&&args[0]=="--stability-test"){StabilityTests.Run(args[1]);return;}
 
    if(args.Length>0&&args[0]=="--inspect") {
     var a=MotionClip.Read(args[1]).Container.animations!.Single();var values=new Dictionary<string,object?>{{"type",a.GetType().Name}};
@@ -63,7 +64,18 @@ public static class Program {
    if(args.Length>0&&args[0]=="--catalog"){Catalog.Build(args[1],args[2]);return;}
    if(args.Length>0&&args[0]=="--smoke")System.Windows.Media.RenderOptions.ProcessRenderMode=System.Windows.Interop.RenderMode.SoftwareOnly;
    var app=new Application();
-   app.DispatcherUnhandledException+=(_,e)=>{File.WriteAllText(Path.Combine(AppContext.BaseDirectory,"error.txt"),e.Exception.ToString());MessageBox.Show(e.Exception.Message,Brand.Name);e.Handled=true;};
+   // A crashed UI may have partially updated its project; do not continue in that state.
+   app.DispatcherUnhandledException+=(_,e)=>{
+    e.Handled=true;
+    StartupDiagnostics.Error("Unhandled UI exception",e.Exception);
+    try{MessageBox.Show(UiText.T("diagStartup")+"\n"+e.Exception.Message+"\nLog: "+(StartupDiagnostics.LogPath??"unavailable"),Brand.Name,MessageBoxButton.OK,MessageBoxImage.Error);}
+    catch(Exception reportError){StartupDiagnostics.Error("Crash dialog",reportError);}
+    app.Shutdown(1);
+   };
+   AppDomain.CurrentDomain.UnhandledException+=(_,e)=>{
+    if(e.ExceptionObject is Exception ex)StartupDiagnostics.Error("Unhandled background exception",ex);
+    else StartupDiagnostics.Record("Unhandled background exception","Unknown exception");
+   };
    var window=new MainWindow();
    if(args.Length>0&&args[0]=="--smoke"){
     window.ShowInTaskbar=false;window.Loaded+=async(_,_)=>{
